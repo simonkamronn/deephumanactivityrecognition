@@ -30,22 +30,20 @@ N_EPOCHS = 500
 
 
 #LOAD DATA
-traindata = sio.loadmat('data/train.mat')
-testdata = sio.loadmat('data/test.mat')
+data = sio.loadmat('data/UCI_HAR_data.mat')
 
+Xtrain = np.atleast_3d(data['x_train']).astype(theano.config.floatX)
+ytrain = tobool(data['y_train']).astype(theano.config.floatX)
 
-Xtrain = np.atleast_3d(traindata['x_train']).astype(theano.config.floatX)
-ytrain = tobool(traindata['y_train']).astype(theano.config.floatX)
+Xval = np.atleast_3d(data['x_test']).astype(theano.config.floatX)
+yval = tobool(data['y_test']).astype(theano.config.floatX)
 
-Xval = np.atleast_3d(testdata['x_test']).astype(theano.config.floatX)
-yval = tobool(testdata['y_test']).astype(theano.config.floatX)
+Xtest = np.atleast_3d(data['x_test']).astype(theano.config.floatX)
+ytest = tobool(data['y_test']).astype(theano.config.floatX)
 
-Xtest = np.atleast_3d(testdata['x_test']).astype(theano.config.floatX)
-ytest = tobool(testdata['y_test']).astype(theano.config.floatX)
-
-N_FEATURES = Xtrain.shape[1]
-SEQLEN = Xtrain.shape[2]
-N_CLASSES = ytrain.shape[1]
+N_FEATURES = int(Xtrain.shape[1])
+SEQLEN = int(Xtrain.shape[2])
+N_CLASSES = int(ytrain.shape[1])
 
 
 #Set up symbolic and shared variables
@@ -66,7 +64,7 @@ givens_test = [(input, sh_input)]
 
 l = lasagne.layers.InputLayer((MINIBATCHSIZE, N_FEATURES, SEQLEN))
 l = lasagne.layers.dropout(l, p=INPUTDROPOUT)
-#conv layers hould take input of (BATCH_SIZE, NFEAT, SEQLEN) i think
+#conv layers should take input of (BATCH_SIZE, NFEAT, SEQLEN) i think
 l = lasagne.layers.Conv1DLayer(l, num_filters=NCONV1, filter_length=3, stride=1, convolution=conv.conv1d_mc0, nonlinearity=nonlinearities.rectify)
 l = lasagne.layers.Conv1DLayer(l, num_filters=NCONV1, filter_length=3, stride=1, convolution=conv.conv1d_mc0, nonlinearity=nonlinearities.rectify)
 #lb = lasagne.layers.Conv1DLayer(l, num_filters=NCONV1, filter_length=3, stride=1, convolution=conv.conv1d_mc0, nonlinearity=nonlinearities.rectify)
@@ -111,9 +109,6 @@ print 'Computing Updates...'
 #updates = lasagne.updates.momentum(cost_train, all_params, learning_rate=LEARNING_RATE)
 #updates = lasagne.updates.momentum(cost_train, all_params, learning_rate=1, epsilon=1e-6 )
 updates = lasagne.updates.nesterov_momentum(cost_train, all_params, learning_rate=LEARNING_RATE, momentum=0.9)
-
-
-
 
 print 'Computing Functions...'
 train = theano.function([], cost_train, updates=updates, givens=givens_train,on_unused_input='warn')
