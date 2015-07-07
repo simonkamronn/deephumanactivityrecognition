@@ -53,7 +53,7 @@ def spectro_conv(X):
 
 to_bool = lambda x: np.asarray(x, dtype=np.bool)
 
-data_path = 'D:/PhD/Data/activity/Human Activity Recognition Using Smartphones Data Set V1/'
+data_path = 'data/Human Activity Recognition Using Smartphones Data Set V1/'
 # files = glob(data_path + '/train/Inertial Signals/body_acc_*')
 # Xtrain = pd.read_csv(files[0], sep=r'\s+')
 
@@ -68,7 +68,8 @@ def load_data():
 
     X_valid = spectro_conv(data['x_test'])
     y_valid = pd.read_csv(data_path + '/test/y_test.txt', squeeze=True).values - 1
-
+#    y_valid = data['y_test'];
+    
     X_test = X_valid
     y_test = y_valid
 
