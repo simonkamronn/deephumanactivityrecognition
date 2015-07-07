@@ -49,7 +49,7 @@ N_FEATURES = int(Xtrain.shape[1])
 SEQLEN = int(Xtrain.shape[2])
 N_CLASSES = int(ytrain.shape[1])
 
-#Set up symbolic and shared variables
+# Set up symbolic and shared variables
 input = T.tensor3('input')
 target_output = T.matrix('target_output')
 
@@ -61,25 +61,22 @@ sh_target_output = theano.shared(np.zeros(shape=batch_size_y, dtype=theano.confi
 givens_train = [(input, sh_input), (target_output, sh_target_output)]
 givens_test = [(input, sh_input)]
 
-#construct the network using lasagne layers
+# construct the network using lasagne layers
 
 #TODO: IM NOT SHURE WHICH CONVOLUTION TO USE i.e. conv1d_unstrided, conv1d_mc0 etc?
 
 l = lasagne.layers.InputLayer((MINIBATCHSIZE, N_FEATURES, SEQLEN))
 l = lasagne.layers.dropout(l, p=INPUTDROPOUT)
-#conv layers should take input of (BATCH_SIZE, NFEAT, SEQLEN) i think
-l = lasagne.layers.Conv1DLayer(l, num_filters=NCONV1, filter_length=3, stride=1, convolution=conv.conv1d_mc0, nonlinearity=nonlinearities.rectify)
-l = lasagne.layers.Conv1DLayer(l, num_filters=NCONV1, filter_length=3, stride=1, convolution=conv.conv1d_mc0, nonlinearity=nonlinearities.rectify)
-#lb = lasagne.layers.Conv1DLayer(l, num_filters=NCONV1, filter_length=3, stride=1, convolution=conv.conv1d_mc0, nonlinearity=nonlinearities.rectify)
-#lc = lasagne.layers.Conv1DLayer(l, num_filters=NCONV1, filter_length=3, stride=1, convolution=conv.conv1d_mc0, nonlinearity=nonlinearities.rectify)
-#ld = lasagne.layers.Conv1DLayer(l, num_filters=NCONV1, filter_length=3, stride=1, convolution=conv.conv1d_mc0, nonlinearity=nonlinearities.rectify)
 
+#conv layers should take input of (BATCH_SIZE, NFEAT, SEQLEN) i think
+l = lasagne.layers.Conv1DLayer(l, NCONV1, 3)
+l = lasagne.layers.Conv1DLayer(l, NCONV1, 3)
 
 #l = lasagne.layers.Conv1DLayer(l, num_filters=NCONV1, filter_length=3, stride=1, convolution=conv.conv1d_mc0, nonlinearity=nonlinearities.rectify)
 l = lasagne.layers.dropout(l, p=DROPOUT)
 #l = lasagne.layers.Conv1DLayer(l, num_filters=NCONV2, filter_length=3, stride=2, convolution=conv.conv1d_mc1, nonlinearity=nonlinearities.rectify)
 #l = lasagne.layers.dropout(l, p=DROPOUT)
-l = lasagne.layers.DenseLayer(l, num_units=NHID, nonlinearity=nonlinearities.rectify)
+l = lasagne.layers.DenseLayer(l, num_units=NHID)
 l = lasagne.layers.dropout(l, p=DROPOUT)
 l = lasagne.layers.DenseLayer(l, num_units=N_CLASSES, nonlinearity=T.nnet.softmax)
 
