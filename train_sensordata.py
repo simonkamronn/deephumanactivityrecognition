@@ -8,9 +8,12 @@ from lasagne.theano_extensions import conv
 import lasagne.updates
 import scipy.io as sio
 import time
+import matplotlib.pyplot as plt
+import pandas as pd
+from matplotlib.mlab import specgram
+from glob import glob
 
 tobool = lambda x: np.asarray(x, dtype=np.bool)
-
 
 # DATASET_PATH = "/home/sedielem/data/urbansound8k/spectrograms.h5"
 MINIBATCHSIZE = 32
@@ -26,10 +29,7 @@ INPUTDROPOUT=0.2
 N_EPOCHS = 500
 # SOFTMAX_LAMBDA = 0.01
 
-
-
-
-#LOAD DATA
+# LOAD DATA
 data = sio.loadmat('data/UCI_HAR_data.mat')
 
 Xtrain = np.atleast_3d(data['x_train']).astype(theano.config.floatX)
@@ -41,10 +41,13 @@ yval = tobool(data['y_test']).astype(theano.config.floatX)
 Xtest = np.atleast_3d(data['x_test']).astype(theano.config.floatX)
 ytest = tobool(data['y_test']).astype(theano.config.floatX)
 
+# data_path = 'D:/PhD/Data/activity/Human Activity Recognition Using Smartphones Data Set V1/'
+# files = glob(data_path + '/train/Inertial Signals/body_acc_*')
+# Xtrain = pd.read_csv(files[0], sep=r'\s+')
+
 N_FEATURES = int(Xtrain.shape[1])
 SEQLEN = int(Xtrain.shape[2])
 N_CLASSES = int(ytrain.shape[1])
-
 
 #Set up symbolic and shared variables
 input = T.tensor3('input')
