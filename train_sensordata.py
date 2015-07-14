@@ -92,7 +92,7 @@ def costfun(ypred, ytar):
     #ytar: MINIBATCHSIZE x N_CLASSES (one hot encoded)
 
     #Convert ytar to class label
-    true_class = T.argmax(ytar,axis=1)
+    true_class = T.argmax(ytar, axis=1)
 
     total_error = -T.log(ypred[T.arange(MINIBATCHSIZE), true_class] + 1e-8)
     cross_ent = T.sum(total_error)/MINIBATCHSIZE
@@ -113,10 +113,10 @@ updates = lasagne.updates.nesterov_momentum(cost_train, all_params, learning_rat
 print 'Computing Functions...'
 train = theano.function([], cost_train, updates=updates, givens=givens_train,on_unused_input='warn')
 compute_cost_val = theano.function([], cost_val, givens=givens_train, on_unused_input='warn') #maybe this is not nescessary
-compute_preds = theano.function([],l.get_output(input, deterministic=True),givens=givens_test, on_unused_input='warn')
+compute_preds = theano.function([], l.get_output(input, deterministic=True), givens=givens_test, on_unused_input='warn')
 
 
-def calcPerformance(X,y):
+def calcPerformance(X, y):
 
     N_SAMPLES = X.shape[0]
     N_BATCH = int(np.ceil(float(N_SAMPLES) / MINIBATCHSIZE))
@@ -127,14 +127,14 @@ def calcPerformance(X,y):
     samples_mod = [x % N_SAMPLES for x in samples]
     batches=[samples_mod[(i)*MINIBATCHSIZE:(i+1)*MINIBATCHSIZE] for i in range(N_BATCH)]
 
+    yclass_true = np.zeros((N_SAMPLES_PAD), dtype=np.int32)
+    yclass_pred = np.zeros((N_SAMPLES_PAD), dtype=np.int32)
 
-    yclass_true = np.zeros((N_SAMPLES_PAD),dtype=np.int32)
-    yclass_pred = np.zeros((N_SAMPLES_PAD),dtype=np.int32)
-    for j,ind in enumerate(batches):
+    for j, ind in enumerate(batches):
 
         # update shared variables
-        y_batch = y[ind,]
-        X_batch = X[ind,]
+        y_batch = y[ind, ]
+        X_batch = X[ind, ]
         sh_target_output.set_value(y_batch)
         sh_input.set_value(X_batch)
 
@@ -142,12 +142,11 @@ def calcPerformance(X,y):
         y_preds = compute_preds()
 
         #store true and predicted class labels
-        yclass_true[ind] = np.argmax(y_batch,axis=1)
-        yclass_pred[ind] = np.argmax(y_preds,axis=1)
+        yclass_true[ind] = np.argmax(y_batch, axis=1)
+        yclass_pred[ind] = np.argmax(y_preds, axis=1)
 
-
-    #Calculated accuracy
-    #remove samples that were "out of bounds" i.e. wrapped around. If not doing this the val/test results might be slightly biased
+    # Calculated accuracy
+    # remove samples that were "out of bounds" i.e. wrapped around. If not doing this the val/test results might be slightly biased
     # i.e if N_SAMPLES_TEST = 5, and MINIBATCHSIZE = 3 -> N_BATCH_TEST = 2 and N_SAMPLES_TEST_PAD = 6
     # => BATCH1 = [0,1,2], BATCH2 = [3,4,0]. Hence we need to account for calculating the performance of some samples twice.
     idkeep = np.array(samples) < N_SAMPLES
@@ -161,9 +160,7 @@ def calcPerformance(X,y):
 
 
 print 'Training...'
-
-
-#Calculate the train batch sizes
+# Calculate the train batch sizes
 N_SAMPLES_TRAIN = Xtrain.shape[0]
 N_BATCH_TRAIN = int(np.ceil(float(N_SAMPLES_TRAIN) / MINIBATCHSIZE))
 N_SAMPLES_TRAIN_PAD = N_BATCH_TRAIN*MINIBATCHSIZE
@@ -172,44 +169,44 @@ Acc_train = []
 Acc_val = []
 Acc_test = []
 for epoch in range(N_EPOCHS):
-    #START TRAINING
+    # START TRAINING
 
-    #shuffle the training sample
+    # shuffle the training sample
     shuffle_samples = np.random.permutation(N_SAMPLES_TRAIN_PAD)
-    #wraps the indexes around so they never exceed N_SAMPLES_TRAIN i.e. ensures that the sample ids are not out of bounds
+    # wraps the indexes around so they never exceed N_SAMPLES_TRAIN i.e.
+    # ensures that the sample ids are not out of bounds
     shuffle_samples = [x % N_SAMPLES_TRAIN for x in shuffle_samples]
-    batches_train=[shuffle_samples[(i)*MINIBATCHSIZE:(i+1)*MINIBATCHSIZE] for i in range(N_BATCH_TRAIN)]
+    batches_train = [shuffle_samples[i*MINIBATCHSIZE:(i+1)*MINIBATCHSIZE] for i in range(N_BATCH_TRAIN)]
 
     start_time = time.time()
     c = 0
     print "Mini-batches Done: "
-    for j,ind in enumerate(batches_train):
+    for j, ind in enumerate(batches_train):
         c += 1
         if c % 5 == 0:
             print '%i ' % c,
 
         # update shared variables
-        y_batch = ytrain[ind,]
-        X_batch = Xtrain[ind,]
+        y_batch = ytrain[ind, ]
+        X_batch = Xtrain[ind, ]
 
         sh_target_output.set_value(y_batch)
         sh_input.set_value(X_batch)
 
-        #training and updting parameters for a single minibatch
+        # training and updating parameters for a single minibatch
         train()
 
-    #END TRAIN
+    # END TRAIN
 
-    #Train Performance
-    acc_train, yclass_pred_train, yclass_true_train = calcPerformance(Xtrain,ytrain)
+    # Train Performance
+    acc_train, yclass_pred_train, yclass_true_train = calcPerformance(Xtrain, ytrain)
     Acc_train.append(acc_train)
 
-
-    #VALIDATION / TEST PERFORMANCE
-    acc_val, yclass_pred_val, yclass_true_val = calcPerformance(Xval,yval)
+    # VALIDATION / TEST PERFORMANCE
+    acc_val, yclass_pred_val, yclass_true_val = calcPerformance(Xval, yval)
     Acc_val.append(acc_val)
 
-    acc_test, yclass_pred_test, yclass_true_test = calcPerformance(Xtest,ytest)
+    acc_test, yclass_pred_test, yclass_true_test = calcPerformance(Xtest, ytest)
     Acc_test.append(acc_test)
 
     end_time = time.time()

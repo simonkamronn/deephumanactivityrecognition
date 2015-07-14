@@ -200,6 +200,7 @@ def create_iter_functions(dataset, output_layer,
     all_params = lasagne.layers.get_all_params(output_layer)
     updates = lasagne.updates.nesterov_momentum(
         loss_train, all_params, learning_rate, momentum)
+    # updates = lasagne.updates.adagrad(cost, all_params, LEARNING_RATE)
 
     iter_train = theano.function(
         [batch_index], loss_train,
