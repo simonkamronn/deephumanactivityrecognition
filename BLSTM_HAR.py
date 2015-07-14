@@ -103,7 +103,7 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
     l_dense = lasagne.layers.DenseLayer(
         l_shp,
         num_units=output_dim,
-        nonlinearity=lasagne.nonlinearities.tanh
+        nonlinearity=lasagne.nonlinearities.softmax
     )
 
     # To reshape back to our original shape
