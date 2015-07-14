@@ -121,15 +121,8 @@ def mse_cost(predicted_values, target_values):
     predicted_values = T.argmax(predicted_values, axis=2)
     return T.mean((predicted_values - target_values)**2)
 
-
 def cross_ent_cost(predicted_values, target_values):
-    '''
-    Calculates cross entropy from predictions
-    :param predicted_values: probabilities for output classes
-    :param target_values: true target in one hot encoding
-    :return: entropy cost
-    '''
-    return -T.sum(target_values*T.log(predicted_values))/T.prod(target_values.shape)
+    return -T.sum(target_values*T.log(predicted_values + 1e-8))/(BATCH_SIZE*N_UNITS)
 
 def create_iter_functions(dataset, output_layer,
                           batch_size=BATCH_SIZE,
@@ -266,6 +259,8 @@ def main(num_epochs=NUM_EPOCHS):
             print("  validation accuracy:\t\t{:.2f} %%".format(
                 epoch['valid_accuracy'] * 100))
 
+            if epoch['train_loss'] is np.nan:
+                break
             if epoch['number'] >= num_epochs:
                 break
 
