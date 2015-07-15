@@ -20,8 +20,8 @@ class LoadHAR(object):
         test_folder = self.root_folder + sub_folder + 'test/'
         train_folder = self.root_folder + sub_folder + 'train/'
 
-        test_files = glob.glob(test_folder + 'Inertial Signals/body_acc_*')
-        train_files = glob.glob(train_folder + 'Inertial Signals/body_acc_*')
+        test_files = glob.glob(test_folder + 'Inertial Signals/total_acc_*')
+        train_files = glob.glob(train_folder + 'Inertial Signals/total_acc_*')
 
         data = dict()
         data['x_test'] = pd.read_csv(test_files[0], sep=r'\s+').values

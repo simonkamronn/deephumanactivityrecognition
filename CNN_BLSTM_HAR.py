@@ -3,8 +3,6 @@ from __future__ import print_function
 import theano
 import theano.tensor as T
 import lasagne
-import lasagne.layers as layers
-import lasagne.layers.recurrent as recurrent
 import load_data as ld
 import numpy as np
 import lasagne.updates
@@ -15,7 +13,7 @@ import time
 # Number of input units (window samples)
 N_UNITS = 128
 # Number of units in the hidden (recurrent) layer
-N_HIDDEN = 128
+N_HIDDEN = 100
 # Number of training sequences in each batch
 BATCH_SIZE = 100
 # Number of features
@@ -23,7 +21,7 @@ N_FEATURES = 3
 # Optimization learning rate
 LEARNING_RATE = .001
 # All gradients above this will be clipped
-GRAD_CLIP = 5
+GRAD_CLIP = 100
 # How often should we check the output?
 EPOCH_SIZE = 100
 # Number of epochs to train the net
@@ -31,7 +29,7 @@ NUM_EPOCHS = 10
 # Momentum
 MOMENTUM = 0.9
 DROPOUT = 0.5
-INPUT_DROPOUT=0.2
+INPUT_DROPOUT = 0.2
 
 # Path to HAR data
 ROOT_FOLDER = 'D:/PhD/Data/activity/'
@@ -69,24 +67,35 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
     # First, we build the network, starting with an input layer
     # Recurrent layers expect input of shape
     # (batch size, max sequence length, number of features)
-    l_in = layers.InputLayer(
+    l_in = lasagne.layers.InputLayer(
         shape=(batch_size, seq_len, N_FEATURES)
     )
 
     # Input dropout for regularization
-    l_in_do = layers.dropout(l_in, p=INPUT_DROPOUT)
+    l_in_do = lasagne.layers.dropout(l_in, p=INPUT_DROPOUT)
 
-    # I'm using a bidirectional network, which means we will combine two
-    # RecurrentLayers, one with the backwards=True keyword argument.
+    # Convolution layers
+    l = lasagne.layers.Conv1DLayer(l_in_do, 64, 3)
+    l = lasagne.layers.Conv1DLayer(l, 64, 3)
+    l = lasagne.layers.dropout(l, p=0.5)
+    l = lasagne.layers.Conv1DLayer(l, 128, 3)
+    l = lasagne.layers.Conv1DLayer(l, 128, 3)
+    l = lasagne.layers.dropout(l, p=0.5)
+    l = lasagne.layers.Conv1DLayer(l, 256, 3)
+    l = lasagne.layers.Conv1DLayer(l, 256, 3)
+    l_conv = lasagne.layers.dropout(l, p=0.5)
+
+    # A bidirectional network, which means we will combine two
+    # LSTMLayers, one with the backwards=True keyword argument.
     # Setting a value for grad_clipping will clip the gradients in the layer
-    l_forward = recurrent.LSTMLayer(
-        l_in_do,
-        num_units=N_HIDDEN,
+    l_forward = lasagne.layers.LSTMLayer(
+        l_conv,
+        num_units=128,
         grad_clipping=GRAD_CLIP
     )
-    l_backward = recurrent.LSTMLayer(
-        l_in_do,
-        num_units=N_HIDDEN,
+    l_backward = lasagne.layers.LSTMLayer(
+        l_conv,
+        num_units=128,
         grad_clipping=GRAD_CLIP,
         backwards=True)
 
@@ -97,41 +106,34 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
     # )
 
     # Sum the layers
-    l_sum = layers.ElemwiseSumLayer([l_forward, l_backward])
+    l_sum = lasagne.layers.ElemwiseSumLayer([l_forward, l_backward])
 
     # In order to connect a recurrent layer to a dense layer, we need to
     # flatten the first two dimensions (our "sample dimensions"); this will
     # cause each time step of each sequence to be processed independently
-    l_shp = layers.ReshapeLayer(
+    l_shp = lasagne.layers.ReshapeLayer(
         l_sum,
         (-1, N_HIDDEN)
     )
 
     # Our output layer is a simple dense connection, with n_classes output unit
-    l_dense = layers.DenseLayer(
+    l_dense = lasagne.layers.DenseLayer(
         l_shp,
         num_units=output_dim,
         nonlinearity=lasagne.nonlinearities.softmax
     )
 
     # To reshape back to our original shape
-    l_out = layers.ReshapeLayer(
+    l_out = lasagne.layers.ReshapeLayer(
         l_dense,
         (batch_size, seq_len, output_dim)
     )
 
     return l_out
 
-def max_vote(m):
-    m = T.argmax(m, axis=2)
-    results = []
-    for i in range(m.shape[0]):
-        results[i] = T.argmax(T.bincount(m[i]))
-    return results
-
 def cross_ent_cost(predicted_values, target_values):
     # TODO: max vote sequences
-    return -T.mean(T.sum(target_values*T.log(predicted_values + 1e-8), axis=target_values.ndim-1))
+    return -T.sum(target_values*T.log(predicted_values + 1e-8))/T.sum(target_values)
 
 def create_iter_functions(dataset, output_layer,
                           batch_size=BATCH_SIZE,
@@ -146,27 +148,27 @@ def create_iter_functions(dataset, output_layer,
     batch_slice = slice(batch_index * batch_size,
                         (batch_index + 1) * batch_size)
 
+    prediction = T.argmax(
+        lasagne.layers.get_output(output_layer, X_batch, deterministic=False),
+        axis=2
+    )
+    accuracy = T.mean(T.eq(prediction, T.argmax(y_batch, axis=2)), dtype=theano.config.floatX)
+
     loss_train = cross_ent_cost(
-        layers.get_output(output_layer, X_batch, deterministic=False),
+        lasagne.layers.get_output(output_layer, X_batch, deterministic=False),
         y_batch
     )
 
-    test_prediction = layers.get_output(output_layer, X_batch, deterministic=True)
     loss_eval = cross_ent_cost(
-        test_prediction,
+        lasagne.layers.get_output(output_layer, X_batch, deterministic=True),
         y_batch
     )
 
-    accuracy = T.mean(
-        T.eq(T.argmax(test_prediction, axis=2), T.argmax(y_batch, axis=2)),
-        dtype=theano.config.floatX
-    )
-
-    all_params = layers.get_all_params(output_layer)
+    all_params = lasagne.layers.get_all_params(output_layer)
     updates = lasagne.updates.rmsprop(
         loss_train,
         all_params,
-        learning_rate=0.002,
+        learning_rate=0.001,
         rho=0.95
     )
 

@@ -15,10 +15,9 @@ from glob import glob
 
 tobool = lambda x: np.asarray(x, dtype=np.bool)
 
-# DATASET_PATH = "/home/sedielem/data/urbansound8k/spectrograms.h5"
 MINIBATCHSIZE = 32
 LEARNING_RATE = 0.01
-#MOMENTUM = 0.9
+MOMENTUM = 0.9
 #WEIGHT_DECAY = 0.0
 
 NCONV1 = 50
@@ -68,16 +67,18 @@ givens_test = [(input, sh_input)]
 l = lasagne.layers.InputLayer((MINIBATCHSIZE, N_FEATURES, SEQLEN))
 l = lasagne.layers.dropout(l, p=INPUTDROPOUT)
 
-#conv layers should take input of (BATCH_SIZE, NFEAT, SEQLEN) i think
-l = lasagne.layers.Conv1DLayer(l, NCONV1, 3)
-l = lasagne.layers.Conv1DLayer(l, NCONV1, 3)
-
-#l = lasagne.layers.Conv1DLayer(l, num_filters=NCONV1, filter_length=3, stride=1, convolution=conv.conv1d_mc0, nonlinearity=nonlinearities.rectify)
-l = lasagne.layers.dropout(l, p=DROPOUT)
-#l = lasagne.layers.Conv1DLayer(l, num_filters=NCONV2, filter_length=3, stride=2, convolution=conv.conv1d_mc1, nonlinearity=nonlinearities.rectify)
-#l = lasagne.layers.dropout(l, p=DROPOUT)
-l = lasagne.layers.DenseLayer(l, num_units=NHID)
-l = lasagne.layers.dropout(l, p=DROPOUT)
+# conv layers should take input of (BATCH_SIZE, NFEAT, SEQLEN) i think
+l = lasagne.layers.Conv1DLayer(l, 64, 3)
+l = lasagne.layers.Conv1DLayer(l, 64, 3)
+l = lasagne.layers.dropout(l, p=0.5)
+l = lasagne.layers.Conv1DLayer(l, 128, 3)
+l = lasagne.layers.Conv1DLayer(l, 128, 3)
+l = lasagne.layers.dropout(l, p=0.5)
+l = lasagne.layers.Conv1DLayer(l, 256, 3)
+l = lasagne.layers.Conv1DLayer(l, 256, 3)
+l = lasagne.layers.dropout(l, p=0.5)
+l = lasagne.layers.DenseLayer(l, num_units=256)
+l = lasagne.layers.dropout(l, p=0.5)
 l = lasagne.layers.DenseLayer(l, num_units=N_CLASSES, nonlinearity=T.nnet.softmax)
 
 #get all params in the network (used to calculated the gradient in the update function (sgd, adagrad)
@@ -87,9 +88,9 @@ print "parameter count: %d" % param_count
 
 #Creates a costfunction
 def costfun(ypred, ytar):
-    #Assumes both are inputs are encoded as one-hot encodings
-    #ypred: MINIBATCHSIZE x N_CLASSES (one hot encoded)
-    #ytar: MINIBATCHSIZE x N_CLASSES (one hot encoded)
+    # Assumes both are inputs are encoded as one-hot encodings
+    # ypred: MINIBATCHSIZE x N_CLASSES (one hot encoded)
+    # ytar: MINIBATCHSIZE x N_CLASSES (one hot encoded)
 
     #Convert ytar to class label
     true_class = T.argmax(ytar, axis=1)
@@ -103,18 +104,18 @@ cost_train = costfun(l.get_output(input, deterministic=False), target_output)
 cost_val = costfun(l.get_output(input, deterministic=True), target_output)
 
 print 'Computing Updates...'
-#Various gradient descent algorithms - nesterovs seems to work well
-#Note that the results seems quite sensitive to the Learning rate -> if the code doesn't converge try to lower the LR
-#updates = lasagne.updates.adagrad(cost_train, all_params, learning_rate=LEARNING_RATE, epsilon=1e-6 )
-#updates = lasagne.updates.momentum(cost_train, all_params, learning_rate=LEARNING_RATE)
-#updates = lasagne.updates.momentum(cost_train, all_params, learning_rate=1, epsilon=1e-6 )
-updates = lasagne.updates.nesterov_momentum(cost_train, all_params, learning_rate=LEARNING_RATE, momentum=0.9)
+# Various gradient descent algorithms - nesterovs seems to work well
+# Note that the results seems quite sensitive to the Learning rate -> if the code doesn't converge try to lower the LR
+# updates = lasagne.updates.adagrad(cost_train, all_params, learning_rate=LEARNING_RATE, epsilon=1e-6 )
+# updates = lasagne.updates.momentum(cost_train, all_params, learning_rate=LEARNING_RATE)
+# updates = lasagne.updates.momentum(cost_train, all_params, learning_rate=1, epsilon=1e-6 )
+# updates = lasagne.updates.nesterov_momentum(cost_train, all_params, learning_rate=LEARNING_RATE, momentum=MOMENTUM)
+updates = lasagne.updates.adam(cost_train, all_params)
 
 print 'Computing Functions...'
 train = theano.function([], cost_train, updates=updates, givens=givens_train,on_unused_input='warn')
 compute_cost_val = theano.function([], cost_val, givens=givens_train, on_unused_input='warn') #maybe this is not nescessary
 compute_preds = theano.function([], l.get_output(input, deterministic=True), givens=givens_test, on_unused_input='warn')
-
 
 def calcPerformance(X, y):
 
@@ -122,10 +123,10 @@ def calcPerformance(X, y):
     N_BATCH = int(np.ceil(float(N_SAMPLES) / MINIBATCHSIZE))
     N_SAMPLES_PAD = N_BATCH*MINIBATCHSIZE
 
-    samples = range(N_SAMPLES_PAD) #no need to shuffle for performance calculation
-    #wraps the indexes around so they never exceed N_SAMPLES_TRAIN i.e. ensures that the sample ids are not out of bounds
+    samples = range(N_SAMPLES_PAD) # no need to shuffle for performance calculation
+    # wraps the indexes around so they never exceed N_SAMPLES_TRAIN i.e. ensures that the sample ids are not out of bounds
     samples_mod = [x % N_SAMPLES for x in samples]
-    batches=[samples_mod[(i)*MINIBATCHSIZE:(i+1)*MINIBATCHSIZE] for i in range(N_BATCH)]
+    batches = [samples_mod[(i)*MINIBATCHSIZE:(i+1)*MINIBATCHSIZE] for i in range(N_BATCH)]
 
     yclass_true = np.zeros((N_SAMPLES_PAD), dtype=np.int32)
     yclass_pred = np.zeros((N_SAMPLES_PAD), dtype=np.int32)
@@ -138,10 +139,10 @@ def calcPerformance(X, y):
         sh_target_output.set_value(y_batch)
         sh_input.set_value(X_batch)
 
-        #compute y_preds using X_batch as input
+        # compute y_preds using X_batch as input
         y_preds = compute_preds()
 
-        #store true and predicted class labels
+        # store true and predicted class labels
         yclass_true[ind] = np.argmax(y_batch, axis=1)
         yclass_pred[ind] = np.argmax(y_preds, axis=1)
 
@@ -155,9 +156,6 @@ def calcPerformance(X, y):
 
     Acc = np.sum(yclass_true == yclass_pred)/float(len(yclass_true))
     return Acc, yclass_pred, yclass_true
-
-
-
 
 print 'Training...'
 # Calculate the train batch sizes
