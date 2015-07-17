@@ -81,12 +81,12 @@ l = lasagne.layers.DenseLayer(l, num_units=256)
 l = lasagne.layers.dropout(l, p=0.5)
 l = lasagne.layers.DenseLayer(l, num_units=N_CLASSES, nonlinearity=T.nnet.softmax)
 
-#get all params in the network (used to calculated the gradient in the update function (sgd, adagrad)
+# get all params in the network (used to calculated the gradient in the update function (sgd, adagrad)
 all_params = lasagne.layers.get_all_params(l)
 param_count = sum([np.prod(p.get_value().shape) for p in all_params])
 print "parameter count: %d" % param_count
 
-#Creates a costfunction
+# Creates a costfunction
 def costfun(ypred, ytar):
     # Assumes both are inputs are encoded as one-hot encodings
     # ypred: MINIBATCHSIZE x N_CLASSES (one hot encoded)

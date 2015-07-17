@@ -74,28 +74,34 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
     # Input dropout for regularization
     l_in_do = lasagne.layers.dropout(l_in, p=INPUT_DROPOUT)
 
+    # Reshape layer for convolution
+    l_dim_shp = lasagne.layers.DimshuffleLayer(l_in_do, (0, 2, 1))
+
+    # Pad to keep original sequence length. Each conv layers takes 2 samples
+    l_pad = lasagne.layers.PadLayer(l_dim_shp, 2)
+
     # Convolution layers
-    l = lasagne.layers.Conv1DLayer(l_in_do, 64, 3)
-    l = lasagne.layers.Conv1DLayer(l, 64, 3)
-    l = lasagne.layers.dropout(l, p=0.5)
-    l = lasagne.layers.Conv1DLayer(l, 128, 3)
-    l = lasagne.layers.Conv1DLayer(l, 128, 3)
-    l = lasagne.layers.dropout(l, p=0.5)
-    l = lasagne.layers.Conv1DLayer(l, 256, 3)
-    l = lasagne.layers.Conv1DLayer(l, 256, 3)
-    l_conv = lasagne.layers.dropout(l, p=0.5)
+    l_conv = lasagne.layers.Conv1DLayer(l_pad, 24, 3)
+    l_conv = lasagne.layers.Conv1DLayer(l_conv, 24, 3)
+    l_conv_do = lasagne.layers.dropout(l_conv, p=0.5)
+
+    # Pool features to reduce variance and parameters
+    # l_pool = lasagne.layers.FeaturePoolLayer(l_conv_do, 2)
+
+    # Reshape layer back to normal
+    l_dim_shp = lasagne.layers.DimshuffleLayer(l_conv_do, (0, 2, 1))
 
     # A bidirectional network, which means we will combine two
     # LSTMLayers, one with the backwards=True keyword argument.
     # Setting a value for grad_clipping will clip the gradients in the layer
     l_forward = lasagne.layers.LSTMLayer(
-        l_conv,
-        num_units=128,
+        l_dim_shp,
+        num_units=N_HIDDEN,
         grad_clipping=GRAD_CLIP
     )
     l_backward = lasagne.layers.LSTMLayer(
-        l_conv,
-        num_units=128,
+        l_dim_shp,
+        num_units=N_HIDDEN,
         grad_clipping=GRAD_CLIP,
         backwards=True)
 
@@ -130,6 +136,7 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
     )
 
     return l_out
+
 
 def cross_ent_cost(predicted_values, target_values):
     # TODO: max vote sequences
