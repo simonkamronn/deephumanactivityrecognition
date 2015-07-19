@@ -139,8 +139,8 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
 
 
 def cross_ent_cost(predicted_values, target_values):
-    # TODO: max vote sequences
     return -T.sum(target_values*T.log(predicted_values + 1e-8))/T.sum(target_values)
+
 
 def create_iter_functions(dataset, output_layer,
                           batch_size=BATCH_SIZE,
@@ -156,7 +156,7 @@ def create_iter_functions(dataset, output_layer,
                         (batch_index + 1) * batch_size)
 
     prediction = T.argmax(
-        lasagne.layers.get_output(output_layer, X_batch, deterministic=False),
+        lasagne.layers.get_output(output_layer, X_batch, deterministic=True),
         axis=2
     )
     accuracy = T.mean(T.eq(prediction, T.argmax(y_batch, axis=2)), dtype=theano.config.floatX)

@@ -73,19 +73,21 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
         shape=(batch_size, seq_len, N_FEATURES)
     )
 
+    l = layers.GaussianNoiseLayer(l_in)
+
     # Input dropout for regularization
-    l_in_do = layers.dropout(l_in, p=INPUT_DROPOUT)
+    l = layers.dropout(l, p=INPUT_DROPOUT)
 
     # I'm using a bidirectional network, which means we will combine two
     # RecurrentLayers, one with the backwards=True keyword argument.
     # Setting a value for grad_clipping will clip the gradients in the layer
     l_forward = recurrent.LSTMLayer(
-        l_in_do,
+        l,
         num_units=N_HIDDEN,
         grad_clipping=GRAD_CLIP
     )
     l_backward = recurrent.LSTMLayer(
-        l_in_do,
+        l,
         num_units=N_HIDDEN,
         grad_clipping=GRAD_CLIP,
         backwards=True)
@@ -97,30 +99,31 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
     # )
 
     # Sum the layers
-    l_sum = layers.ElemwiseSumLayer([l_forward, l_backward])
+    l = layers.ElemwiseSumLayer([l_forward, l_backward])
 
     # In order to connect a recurrent layer to a dense layer, we need to
     # flatten the first two dimensions (our "sample dimensions"); this will
     # cause each time step of each sequence to be processed independently
-    l_shp = layers.ReshapeLayer(
-        l_sum,
+    l = layers.ReshapeLayer(
+        l,
         (-1, N_HIDDEN)
     )
 
     # Our output layer is a simple dense connection, with n_classes output unit
-    l_dense = layers.DenseLayer(
-        l_shp,
+    l = layers.DenseLayer(
+        l,
         num_units=output_dim,
         nonlinearity=lasagne.nonlinearities.softmax
     )
 
     # To reshape back to our original shape
     l_out = layers.ReshapeLayer(
-        l_dense,
+        l,
         (batch_size, seq_len, output_dim)
     )
 
     return l_out
+
 
 def max_vote(m):
     m = T.argmax(m, axis=2)
@@ -129,9 +132,11 @@ def max_vote(m):
         results[i] = T.argmax(T.bincount(m[i]))
     return results
 
+
 def cross_ent_cost(predicted_values, target_values):
     # TODO: max vote sequences
     return -T.mean(T.sum(target_values*T.log(predicted_values + 1e-8), axis=target_values.ndim-1))
+
 
 def create_iter_functions(dataset, output_layer,
                           batch_size=BATCH_SIZE,

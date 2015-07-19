@@ -1,9 +1,7 @@
 from __future__ import print_function
 """
-Based on implementation from Zheng, 2014, Time series classification
-using multi-channels deep convolutional neural networks
+Based on implementation from Lane, 2015, Can Deep Learning Revolutionize Mobile Sensing ?
 """
-
 
 import theano
 import theano.tensor as T
@@ -45,60 +43,41 @@ def load_data():
 
     return dict(
         output_dim=int(data['y_test'].shape[-1]),
-        X_train=theano.shared(data['x_train'].astype(theano.config.floatX)),
+        X_train=theano.shared(data['x_train_features'].astype(theano.config.floatX)),
         y_train=theano.shared(
             data['y_train'].astype(theano.config.floatX)
         ),
-        X_valid=theano.shared(data['x_test'].astype(theano.config.floatX)),
+        X_valid=theano.shared(data['x_test_features'].astype(theano.config.floatX)),
         y_valid=theano.shared(
             data['y_test'].astype(theano.config.floatX)
         ),
-        X_test=theano.shared(data['x_test'].astype(theano.config.floatX)),
+        X_test=theano.shared(data['x_test_features'].astype(theano.config.floatX)),
         y_test=theano.shared(
             data['y_test'].astype(theano.config.floatX)
         ),
         num_examples_train=data['x_train'].shape[0],
         num_examples_valid=data['x_test'].shape[0],
         num_examples_test=data['x_test'].shape[0],
-        seq_len=int(data['x_train'].shape[1]),
-        n_fea=int(data['x_train'].shape[2])
+        num_features=int(data['x_train_features'].shape[1])
         )
 
 
-def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
+def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, num_features=N_FEATURES):
     print("Building network ...")
     # First, we build the network, starting with an input layer
     # Recurrent layers expect input of shape
     # (batch size, max sequence length, number of features)
     l = lasagne.layers.InputLayer(
-        shape=(batch_size, seq_len, N_FEATURES)
+        shape=(batch_size, num_features)
     )
 
     # Input dropout for regularization
     l = lasagne.layers.dropout(l, p=INPUT_DROPOUT)
 
-    # Reshape layer for convolution
-    l = lasagne.layers.DimshuffleLayer(l, (0, 2, 1))
-
-    # Reshape input to process each channel individually
-    l = lasagne.layers.ReshapeLayer(l, (batch_size*N_FEATURES, 1, seq_len))
-
-    # Convolution layers. Convolution, pooling and dropout
-    l = lasagne.layers.Conv1DLayer(l, 12, 3)
-    l = lasagne.layers.Conv1DLayer(l, 12, 3)
-    l = lasagne.layers.FeaturePoolLayer(l, 2, pool_function=T.max)
-    l = lasagne.layers.dropout(l, p=0.5)
-
-    l = lasagne.layers.Conv1DLayer(l, 24, 3)
-    l = lasagne.layers.Conv1DLayer(l, 24, 3)
-    l = lasagne.layers.FeaturePoolLayer(l, 2, pool_function=T.max)
-    l = lasagne.layers.dropout(l, p=0.5)
-
-    # Flatting of the features
-    l = lasagne.layers.ReshapeLayer(l, (batch_size, -1))
-
-    # Add a dense layer
-    l = lasagne.layers.DenseLayer(l, num_units=512)
+    # Three dense layers
+    l = lasagne.layers.DenseLayer(l, num_units=128)
+    l = lasagne.layers.DenseLayer(l, num_units=128)
+    l = lasagne.layers.DenseLayer(l, num_units=128)
 
     # Our output layer is a simple dense connection, with n_classes output unit
     l_out = lasagne.layers.DenseLayer(
@@ -122,7 +101,7 @@ def create_iter_functions(dataset, output_layer,
     Create functions for training, validation and testing to iterate one epoch.
     """
     batch_index = T.iscalar('batch_index')
-    X_batch = T.tensor3('input')
+    X_batch = T.matrix('input')
     y_batch = T.matrix('target_output')
     batch_slice = slice(batch_index * batch_size,
                         (batch_index + 1) * batch_size)
@@ -221,7 +200,7 @@ def main(num_epochs=NUM_EPOCHS):
     output_layer = build_model(
         output_dim=dataset['output_dim'],
         batch_size=BATCH_SIZE,
-        seq_len=dataset['seq_len']
+        num_features=dataset['num_features']
         )
 
     iter_funcs = create_iter_functions(

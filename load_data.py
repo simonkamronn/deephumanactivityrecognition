@@ -35,7 +35,11 @@ class LoadHAR(object):
         data['y_train'] = one_hot(pd.read_csv(train_folder + 'y_train.txt', squeeze=True).values - 1)
         data['y_test'] = one_hot(pd.read_csv(test_folder + 'y_test.txt', squeeze=True).values - 1)
 
+        data['x_test_features'] = pd.read_csv(test_folder + 'X_test.txt', sep=r'\s+').values
+        data['x_train_features'] = pd.read_csv(train_folder + 'X_train.txt', sep=r'\s+').values
+
         return data
+
 
 def one_hot(labels, n_classes=None):
     '''
