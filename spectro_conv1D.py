@@ -85,9 +85,6 @@ givens_train = [(input, sh_input), (target_output, sh_target_output)]
 givens_test = [(input, sh_input)]
 
 # construct the network using lasagne layers
-
-#TODO: IM NOT SHURE WHICH CONVOLUTION TO USE i.e. conv1d_unstrided, conv1d_mc0 etc?
-
 l = lasagne.layers.InputLayer((MINIBATCHSIZE, N_FEATURES, SEQLEN))
 l = lasagne.layers.dropout(l, p=INPUTDROPOUT)
 

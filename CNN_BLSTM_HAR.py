@@ -8,12 +8,13 @@ import numpy as np
 import lasagne.updates
 import itertools
 import time
-
+import pandas as pd
+#import matplotlib.pyplot as plt
 
 # Number of input units (window samples)
 N_UNITS = 128
 # Number of units in the hidden (recurrent) layer
-N_HIDDEN = 100
+N_HIDDEN = 200
 # Number of training sequences in each batch
 BATCH_SIZE = 100
 # Number of features
@@ -25,18 +26,22 @@ GRAD_CLIP = 100
 # How often should we check the output?
 EPOCH_SIZE = 100
 # Number of epochs to train the net
-NUM_EPOCHS = 10
+NUM_EPOCHS = 500
 # Momentum
 MOMENTUM = 0.9
 DROPOUT = 0.5
 INPUT_DROPOUT = 0.2
+# Forget gate init bias
+CONST_FORGET_B = 1.
 
 # Path to HAR data
-ROOT_FOLDER = 'D:/PhD/Data/activity/'
+# ROOT_FOLDER = 'D:/PhD/Data/activity/'
+ROOT_FOLDER = '/home/sdka/data/activity'
 
 # Expand the target to all time steps
 def expand_target(y, length):
-    return np.rollaxis(np.tile(y, (length, 1, 1)), 1,)
+    return y
+
 
 def load_data():
     data = ld.LoadHAR(ROOT_FOLDER).uci_har_v1()
@@ -62,6 +67,7 @@ def load_data():
         n_fea=int(data['x_train'].shape[2])
         )
 
+
 def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
     print("Building network ...")
     # First, we build the network, starting with an input layer
@@ -72,67 +78,97 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
     )
 
     # Input dropout for regularization
-    l_in_do = lasagne.layers.dropout(l_in, p=INPUT_DROPOUT)
+    l = lasagne.layers.dropout(l_in, p=INPUT_DROPOUT)
 
     # Reshape layer for convolution
-    l_dim_shp = lasagne.layers.DimshuffleLayer(l_in_do, (0, 2, 1))
+    l = lasagne.layers.DimshuffleLayer(l, (0, 2, 1))
 
     # Pad to keep original sequence length. Each conv layers takes 2 samples
-    l_pad = lasagne.layers.PadLayer(l_dim_shp, 2)
+    l_pad = lasagne.layers.PadLayer(l, 2)
 
-    # Convolution layers
-    l_conv = lasagne.layers.Conv1DLayer(l_pad, 24, 3)
-    l_conv = lasagne.layers.Conv1DLayer(l_conv, 24, 3)
-    l_conv_do = lasagne.layers.dropout(l_conv, p=0.5)
-
-    # Pool features to reduce variance and parameters
-    # l_pool = lasagne.layers.FeaturePoolLayer(l_conv_do, 2)
+    # Convolution layers. Convolution, pooling and dropout
+    l_conv = lasagne.layers.Conv1DLayer(l_pad,  num_filters=24, filter_size=3)
+    l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
+    l_conv = lasagne.layers.Conv1DLayer(l_pool, num_filters=48, filter_size=3)
+    l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
+    l_conv = lasagne.layers.Conv1DLayer(l_pool, num_filters=96, filter_size=3)
+    l_conv = lasagne.layers.Conv1DLayer(l_conv, num_filters=96, filter_size=3)
+    l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
 
     # Reshape layer back to normal
-    l_dim_shp = lasagne.layers.DimshuffleLayer(l_conv_do, (0, 2, 1))
+    l = lasagne.layers.DimshuffleLayer(l, (0, 2, 1))
 
-    # A bidirectional network, which means we will combine two
-    # LSTMLayers, one with the backwards=True keyword argument.
-    # Setting a value for grad_clipping will clip the gradients in the layer
+    # BLSTM layers
     l_forward = lasagne.layers.LSTMLayer(
-        l_dim_shp,
-        num_units=N_HIDDEN,
-        grad_clipping=GRAD_CLIP
+        l,
+        num_units=N_HIDDEN/2,
+        ingate=lasagne.layers.Gate(
+            W_in=lasagne.init.HeUniform(),
+            W_hid=lasagne.init.HeUniform()
+        ),
+        grad_clipping=GRAD_CLIP,
+        forgetgate=lasagne.layers.Gate(
+            b=lasagne.init.Constant(CONST_FORGET_B)
+        )
     )
     l_backward = lasagne.layers.LSTMLayer(
-        l_dim_shp,
-        num_units=N_HIDDEN,
+        l,
+        num_units=N_HIDDEN/2,
+        ingate=lasagne.layers.Gate(
+            W_in=lasagne.init.HeUniform(),
+            W_hid=lasagne.init.HeUniform()
+        ),
         grad_clipping=GRAD_CLIP,
-        backwards=True)
+        forgetgate=lasagne.layers.Gate(
+            b=lasagne.init.Constant(CONST_FORGET_B)
+        ),
+        backwards=True
+    )
 
-    # Now, we'll concatenate the outputs to combine them.
-    # l_con = lasagne.layers.ConcatLayer(
-    #     [l_forward, l_backward],
-    #     axis=-1
-    # )
+    l_cat = lasagne.layers.ConcatLayer(
+        [l_forward, l_backward],
+        axis=2
+    )
 
-    # Sum the layers
-    l_sum = lasagne.layers.ElemwiseSumLayer([l_forward, l_backward])
+    l_forward = lasagne.layers.LSTMLayer(
+        l_cat,
+        num_units=N_HIDDEN/2,
+        ingate=lasagne.layers.Gate(
+            W_in=lasagne.init.HeUniform(),
+            W_hid=lasagne.init.HeUniform()
+        ),
+        grad_clipping=GRAD_CLIP,
+        forgetgate=lasagne.layers.Gate(
+            b=lasagne.init.Constant(CONST_FORGET_B)
+        )
+    )
+    l_backward = lasagne.layers.LSTMLayer(
+        l_cat,
+        num_units=N_HIDDEN/2,
+        ingate=lasagne.layers.Gate(
+            W_in=lasagne.init.HeUniform(),
+            W_hid=lasagne.init.HeUniform()
+        ),
+        grad_clipping=GRAD_CLIP,
+        forgetgate=lasagne.layers.Gate(
+            b=lasagne.init.Constant(CONST_FORGET_B)
+        ),
+        backwards=True
+    )
 
-    # In order to connect a recurrent layer to a dense layer, we need to
-    # flatten the first two dimensions (our "sample dimensions"); this will
-    # cause each time step of each sequence to be processed independently
-    l_shp = lasagne.layers.ReshapeLayer(
-        l_sum,
-        (-1, N_HIDDEN)
+    l_forward_slice = lasagne.layers.SliceLayer(l_forward, -1, 1)
+    l_backward_slice = lasagne.layers.SliceLayer(l_backward, 0, 1)
+
+    l_cat2 = lasagne.layers.ConcatLayer(
+        [l_forward_slice, l_backward_slice],
+        axis=1
     )
 
     # Our output layer is a simple dense connection, with n_classes output unit
-    l_dense = lasagne.layers.DenseLayer(
-        l_shp,
+    l_out = lasagne.layers.DenseLayer(
+        l_cat2,
         num_units=output_dim,
         nonlinearity=lasagne.nonlinearities.softmax
-    )
-
-    # To reshape back to our original shape
-    l_out = lasagne.layers.ReshapeLayer(
-        l_dense,
-        (batch_size, seq_len, output_dim)
     )
 
     return l_out
@@ -151,15 +187,15 @@ def create_iter_functions(dataset, output_layer,
     """
     batch_index = T.iscalar('batch_index')
     X_batch = T.tensor3('input')
-    y_batch = T.tensor3('target_output')
+    y_batch = T.matrix('target_output')
     batch_slice = slice(batch_index * batch_size,
                         (batch_index + 1) * batch_size)
 
     prediction = T.argmax(
         lasagne.layers.get_output(output_layer, X_batch, deterministic=True),
-        axis=2
+        axis=1
     )
-    accuracy = T.mean(T.eq(prediction, T.argmax(y_batch, axis=2)), dtype=theano.config.floatX)
+    accuracy = T.mean(T.eq(prediction, T.argmax(y_batch, axis=1)), dtype=theano.config.floatX)
 
     loss_train = cross_ent_cost(
         lasagne.layers.get_output(output_layer, X_batch, deterministic=False),
@@ -175,7 +211,7 @@ def create_iter_functions(dataset, output_layer,
     updates = lasagne.updates.rmsprop(
         loss_train,
         all_params,
-        learning_rate=0.001,
+        learning_rate=0.002,
         rho=0.95
     )
 
@@ -258,6 +294,7 @@ def main(num_epochs=NUM_EPOCHS):
         output_layer,
         )
 
+    results = []
     print("Starting training...")
     now = time.time()
     try:
@@ -269,16 +306,19 @@ def main(num_epochs=NUM_EPOCHS):
             print("  validation loss:\t\t{:.6f}".format(epoch['valid_loss']))
             print("  validation accuracy:\t\t{:.2f} %%".format(
                 epoch['valid_accuracy'] * 100))
+            results.append([epoch['train_loss'], epoch['valid_loss'], epoch['valid_accuracy']])
 
             if epoch['train_loss'] is np.nan:
                 break
             if epoch['number'] >= num_epochs:
                 break
-
+        df = pd.DataFrame(np.asarray(results), columns=['Training loss', 'Validation loss', 'Validation accuracy'])
     except KeyboardInterrupt:
         pass
 
-    return output_layer
+    return output_layer, df
 
 if __name__ == '__main__':
-    main()
+    output_layer, df = main()
+    #df.plot()
+    #plt.show()

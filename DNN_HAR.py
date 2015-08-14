@@ -75,9 +75,12 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, num_features=N_
     l = lasagne.layers.dropout(l, p=INPUT_DROPOUT)
 
     # Three dense layers
-    l = lasagne.layers.DenseLayer(l, num_units=128)
-    l = lasagne.layers.DenseLayer(l, num_units=128)
-    l = lasagne.layers.DenseLayer(l, num_units=128)
+    l = lasagne.layers.DenseLayer(l, num_units=128, nonlinearity=lasagne.nonlinearities.sigmoid)
+    l = lasagne.layers.DenseLayer(l, num_units=128, nonlinearity=lasagne.nonlinearities.sigmoid)
+    l = lasagne.layers.DenseLayer(l, num_units=128, nonlinearity=lasagne.nonlinearities.sigmoid)
+
+    # Dropout layer
+    l = lasagne.layers.dropout(l, p=0.5)
 
     # Our output layer is a simple dense connection, with n_classes output unit
     l_out = lasagne.layers.DenseLayer(

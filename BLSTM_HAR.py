@@ -15,7 +15,7 @@ import time
 # Number of input units (window samples)
 N_UNITS = 128
 # Number of units in the hidden (recurrent) layer
-N_HIDDEN = 128
+N_HIDDEN = 200
 # Number of training sequences in each batch
 BATCH_SIZE = 100
 # Number of features
@@ -27,18 +27,23 @@ GRAD_CLIP = 5
 # How often should we check the output?
 EPOCH_SIZE = 100
 # Number of epochs to train the net
-NUM_EPOCHS = 10
+NUM_EPOCHS = 1000
 # Momentum
 MOMENTUM = 0.9
 DROPOUT = 0.5
-INPUT_DROPOUT=0.2
+INPUT_DROPOUT = 0.2
+# Forget gate bias init
+CONST_FORGET_B = 1.
 
 # Path to HAR data
-ROOT_FOLDER = 'D:/PhD/Data/activity/'
+# ROOT_FOLDER = 'D:/PhD/Data/activity'
+ROOT_FOLDER = '/home/sdka/data/activity'
 
 # Expand the target to all time steps
 def expand_target(y, length):
-    return np.rollaxis(np.tile(y, (length, 1, 1)), 1,)
+    #return np.rollaxis(np.tile(y, (length, 1, 1)), 1,)
+    return y
+
 
 def load_data():
     data = ld.LoadHAR(ROOT_FOLDER).uci_har_v1()
@@ -64,6 +69,7 @@ def load_data():
         n_fea=int(data['x_train'].shape[2])
         )
 
+
 def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
     print("Building network ...")
     # First, we build the network, starting with an input layer
@@ -73,54 +79,100 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
         shape=(batch_size, seq_len, N_FEATURES)
     )
 
-    l = layers.GaussianNoiseLayer(l_in)
+    # Adding noise to weights can help training
+    # l = layers.GaussianNoiseLayer(l_in)
 
     # Input dropout for regularization
-    l = layers.dropout(l, p=INPUT_DROPOUT)
+    l = layers.dropout(l_in, p=INPUT_DROPOUT)
 
     # I'm using a bidirectional network, which means we will combine two
     # RecurrentLayers, one with the backwards=True keyword argument.
     # Setting a value for grad_clipping will clip the gradients in the layer
     l_forward = recurrent.LSTMLayer(
         l,
-        num_units=N_HIDDEN,
-        grad_clipping=GRAD_CLIP
+        num_units=N_HIDDEN/2,
+        ingate=recurrent.Gate(
+            W_in=lasagne.init.HeUniform(),
+            W_hid=lasagne.init.HeUniform()
+        ),
+        grad_clipping=GRAD_CLIP,
+        forgetgate=recurrent.Gate(
+            b=lasagne.init.Constant(CONST_FORGET_B)
+        )
     )
     l_backward = recurrent.LSTMLayer(
         l,
-        num_units=N_HIDDEN,
+        num_units=N_HIDDEN/2,
+        ingate=recurrent.Gate(
+            W_in=lasagne.init.HeUniform(),
+            W_hid=lasagne.init.HeUniform()
+        ),
         grad_clipping=GRAD_CLIP,
-        backwards=True)
+        forgetgate=recurrent.Gate(
+            b=lasagne.init.Constant(CONST_FORGET_B)
+        ),
+        backwards=True
+    )
 
-    # Now, we'll concatenate the outputs to combine them.
-    # l_con = lasagne.layers.ConcatLayer(
-    #     [l_forward, l_backward],
-    #     axis=-1
-    # )
+    l_cat = lasagne.layers.ConcatLayer(
+        [l_forward, l_backward],
+        axis=2
+    )
 
-    # Sum the layers
-    l = layers.ElemwiseSumLayer([l_forward, l_backward])
+    l_forward = recurrent.LSTMLayer(
+        l_cat,
+        num_units=N_HIDDEN/2,
+        ingate=recurrent.Gate(
+            W_in=lasagne.init.HeUniform(),
+            W_hid=lasagne.init.HeUniform()
+        ),
+        grad_clipping=GRAD_CLIP,
+        forgetgate=recurrent.Gate(
+            b=lasagne.init.Constant(CONST_FORGET_B)
+        )
+    )
+    l_backward = recurrent.LSTMLayer(
+        l_cat,
+        num_units=N_HIDDEN/2,
+        ingate=recurrent.Gate(
+            W_in=lasagne.init.HeUniform(),
+            W_hid=lasagne.init.HeUniform()
+        ),
+        grad_clipping=GRAD_CLIP,
+        forgetgate=recurrent.Gate(
+            b=lasagne.init.Constant(CONST_FORGET_B)
+        ),
+        backwards=True
+    )
+
+    l_forward_slice = lasagne.layers.SliceLayer(l_forward, -1, 1)
+    l_backward_slice = lasagne.layers.SliceLayer(l_backward, 0, 1)
+
+    l_cat2 = lasagne.layers.ConcatLayer(
+        [l_forward_slice, l_backward_slice],
+        axis=1
+    )
 
     # In order to connect a recurrent layer to a dense layer, we need to
     # flatten the first two dimensions (our "sample dimensions"); this will
     # cause each time step of each sequence to be processed independently
-    l = layers.ReshapeLayer(
-        l,
-        (-1, N_HIDDEN)
-    )
+    # l_shp = layers.ReshapeLayer(
+    #     l_cat2,
+    #     (-1, N_HIDDEN)
+    # )
 
     # Our output layer is a simple dense connection, with n_classes output unit
-    l = layers.DenseLayer(
-        l,
+    l_out = layers.DenseLayer(
+        l_cat2,
         num_units=output_dim,
         nonlinearity=lasagne.nonlinearities.softmax
     )
 
-    # To reshape back to our original shape
-    l_out = layers.ReshapeLayer(
-        l,
-        (batch_size, seq_len, output_dim)
-    )
+    # # To reshape back to our original shape
+    # l_out = layers.ReshapeLayer(
+    #     l_dense,
+    #     (batch_size, output_dim)
+    # )
 
     return l_out
 
@@ -134,8 +186,7 @@ def max_vote(m):
 
 
 def cross_ent_cost(predicted_values, target_values):
-    # TODO: max vote sequences
-    return -T.mean(T.sum(target_values*T.log(predicted_values + 1e-8), axis=target_values.ndim-1))
+    return -T.sum(target_values.flatten()*T.log(predicted_values.flatten() + 1e-8))/T.sum(target_values)
 
 
 def create_iter_functions(dataset, output_layer,
@@ -147,7 +198,7 @@ def create_iter_functions(dataset, output_layer,
     """
     batch_index = T.iscalar('batch_index')
     X_batch = T.tensor3('input')
-    y_batch = T.tensor3('target_output')
+    y_batch = T.matrix('target_output')
     batch_slice = slice(batch_index * batch_size,
                         (batch_index + 1) * batch_size)
 
@@ -163,7 +214,7 @@ def create_iter_functions(dataset, output_layer,
     )
 
     accuracy = T.mean(
-        T.eq(T.argmax(test_prediction, axis=2), T.argmax(y_batch, axis=2)),
+        T.eq(T.argmax(test_prediction, axis=1), T.argmax(y_batch, axis=1)),
         dtype=theano.config.floatX
     )
 
@@ -205,6 +256,7 @@ def create_iter_functions(dataset, output_layer,
         valid=iter_valid,
         test=iter_test,
     )
+
 
 def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
     """Train the model with `dataset` with mini-batch training. Each

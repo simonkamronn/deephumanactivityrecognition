@@ -13,7 +13,8 @@ import numpy as np
 import lasagne.updates
 import itertools
 import time
-
+import pandas as pd
+import matplotlib.pyplot as plt
 
 # Number of input units (window samples)
 N_UNITS = 128
@@ -30,7 +31,7 @@ GRAD_CLIP = 100
 # How often should we check the output?
 EPOCH_SIZE = 100
 # Number of epochs to train the net
-NUM_EPOCHS = 1000
+NUM_EPOCHS = 100
 # Momentum
 MOMENTUM = 0.9
 DROPOUT = 0.5
@@ -70,39 +71,39 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
     # First, we build the network, starting with an input layer
     # Recurrent layers expect input of shape
     # (batch size, max sequence length, number of features)
-    l = lasagne.layers.InputLayer(
+    l_in = lasagne.layers.InputLayer(
         shape=(batch_size, seq_len, N_FEATURES)
     )
 
     # Input dropout for regularization
-    l = lasagne.layers.dropout(l, p=INPUT_DROPOUT)
+    l_do = lasagne.layers.dropout(l_in, p=INPUT_DROPOUT)
 
     # Reshape layer for convolution
-    l = lasagne.layers.DimshuffleLayer(l, (0, 2, 1))
-
-    # Reshape input to process each channel individually
-    l = lasagne.layers.ReshapeLayer(l, (batch_size*N_FEATURES, 1, seq_len))
+    l_dim = lasagne.layers.DimshuffleLayer(l_do, (0, 2, 1))
 
     # Convolution layers. Convolution, pooling and dropout
-    l = lasagne.layers.Conv1DLayer(l, 12, 3)
-    l = lasagne.layers.Conv1DLayer(l, 12, 3)
-    l = lasagne.layers.FeaturePoolLayer(l, 2, pool_function=T.max)
-    l = lasagne.layers.dropout(l, p=0.5)
+    l_conv = lasagne.layers.Conv1DLayer(l_dim,  num_filters=24, filter_size=3)
+    l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
+    l_conv = lasagne.layers.Conv1DLayer(l_pool, num_filters=48, filter_size=3)
+    l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
+    l_conv = lasagne.layers.Conv1DLayer(l_pool, num_filters=96, filter_size=3)
+    l_conv = lasagne.layers.Conv1DLayer(l_conv, num_filters=96, filter_size=3)
+    l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
+    # l_conv = lasagne.layers.Conv1DLayer(l_pool, num_filters=128, filter_size=3)
+    # l_conv = lasagne.layers.Conv1DLayer(l_conv, num_filters=128, filter_size=3)
+    # l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
 
-    l = lasagne.layers.Conv1DLayer(l, 24, 3)
-    l = lasagne.layers.Conv1DLayer(l, 24, 3)
-    l = lasagne.layers.FeaturePoolLayer(l, 2, pool_function=T.max)
-    l = lasagne.layers.dropout(l, p=0.5)
+    # Reshape to batch_size x all samples to classify the whole batch
+    l_sph = lasagne.layers.ReshapeLayer(l_pool, (batch_size, -1))
 
-    # Flatting of the features
-    l = lasagne.layers.ReshapeLayer(l, (batch_size, -1))
-
-    # Add a dense layer
-    l = lasagne.layers.DenseLayer(l, num_units=512)
+    # Add dense layers
+    l_dense = lasagne.layers.DenseLayer(l_sph, num_units=256)
+    l_dense = lasagne.layers.DenseLayer(l_dense, num_units=256)
+    l_do = lasagne.layers.dropout(l_dense, p=0.5)
 
     # Our output layer is a simple dense connection, with n_classes output unit
     l_out = lasagne.layers.DenseLayer(
-        l,
+        l_do,
         num_units=output_dim,
         nonlinearity=lasagne.nonlinearities.softmax
     )
@@ -181,6 +182,7 @@ def create_iter_functions(dataset, output_layer,
         test=iter_test,
     )
 
+
 def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
     """Train the model with `dataset` with mini-batch training. Each
        mini-batch has `batch_size` recordings.
@@ -213,6 +215,7 @@ def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
             'valid_accuracy': avg_valid_accuracy,
         }
 
+
 def main(num_epochs=NUM_EPOCHS):
     print("Loading data...")
     dataset = load_data()
@@ -229,6 +232,7 @@ def main(num_epochs=NUM_EPOCHS):
         output_layer,
         )
 
+    results = []
     print("Starting training...")
     now = time.time()
     try:
@@ -241,15 +245,20 @@ def main(num_epochs=NUM_EPOCHS):
             print("  validation accuracy:\t\t{:.2f} %%".format(
                 epoch['valid_accuracy'] * 100))
 
+            results.append([epoch['train_loss'], epoch['valid_loss'], epoch['valid_accuracy']])
+
             if epoch['train_loss'] is np.nan:
                 break
             if epoch['number'] >= num_epochs:
                 break
+        df = pd.DataFrame(np.asarray(results), columns=['Training loss', 'Validation loss', 'Validation accuracy'])
 
     except KeyboardInterrupt:
         pass
 
-    return output_layer
+    return output_layer, df
 
 if __name__ == '__main__':
-    main()
+    output, df = main()
+    df.plot()
+    plt.show()
