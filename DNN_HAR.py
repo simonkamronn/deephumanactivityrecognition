@@ -3,6 +3,10 @@ from __future__ import print_function
 Based on implementation from Lane, 2015, Can Deep Learning Revolutionize Mobile Sensing ?
 """
 
+import theano.sandbox.cuda
+theano.sandbox.cuda.use('gpu0')
+
+import os
 import theano
 import theano.tensor as T
 import lasagne
@@ -11,8 +15,12 @@ import numpy as np
 import lasagne.updates
 import itertools
 import time
+import pandas as pd
+import datetime
+import matplotlib
+matplotlib.use("Agg")
 
-
+NAME = "DNN"
 # Number of input units (window samples)
 N_UNITS = 128
 # Number of units in the hidden (recurrent) layer
@@ -28,14 +36,17 @@ GRAD_CLIP = 100
 # How often should we check the output?
 EPOCH_SIZE = 100
 # Number of epochs to train the net
-NUM_EPOCHS = 1000
+NUM_EPOCHS = 500
 # Momentum
 MOMENTUM = 0.9
 DROPOUT = 0.5
 INPUT_DROPOUT = 0.2
 
 # Path to HAR data
-ROOT_FOLDER = 'D:/PhD/Data/activity/'
+if 'nt' in os.name:
+    ROOT_FOLDER = 'D:/PhD/Data/activity/'
+else:
+    ROOT_FOLDER = '/home/sdka/data/activity'
 
 
 def load_data():
@@ -58,26 +69,26 @@ def load_data():
         num_examples_train=data['x_train'].shape[0],
         num_examples_valid=data['x_test'].shape[0],
         num_examples_test=data['x_test'].shape[0],
-        num_features=int(data['x_train_features'].shape[1])
+        n_fea=int(data['x_train_features'].shape[1])
         )
 
 
-def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, num_features=N_FEATURES):
+def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=N_FEATURES):
     print("Building network ...")
     # First, we build the network, starting with an input layer
     # Recurrent layers expect input of shape
     # (batch size, max sequence length, number of features)
     l = lasagne.layers.InputLayer(
-        shape=(batch_size, num_features)
+        shape=(batch_size, n_features)
     )
 
     # Input dropout for regularization
     l = lasagne.layers.dropout(l, p=INPUT_DROPOUT)
 
     # Three dense layers
-    l = lasagne.layers.DenseLayer(l, num_units=128, nonlinearity=lasagne.nonlinearities.sigmoid)
-    l = lasagne.layers.DenseLayer(l, num_units=128, nonlinearity=lasagne.nonlinearities.sigmoid)
-    l = lasagne.layers.DenseLayer(l, num_units=128, nonlinearity=lasagne.nonlinearities.sigmoid)
+    l = lasagne.layers.DenseLayer(l, num_units=128)
+    l = lasagne.layers.DenseLayer(l, num_units=256)
+    l = lasagne.layers.DenseLayer(l, num_units=512)
 
     # Dropout layer
     l = lasagne.layers.dropout(l, p=0.5)
@@ -129,7 +140,7 @@ def create_iter_functions(dataset, output_layer,
     updates = lasagne.updates.adam(
         loss_train,
         all_params,
-        learning_rate=0.001
+        learning_rate=learning_rate
     )
 
     iter_train = theano.function(
@@ -163,6 +174,7 @@ def create_iter_functions(dataset, output_layer,
         test=iter_test,
     )
 
+
 def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
     """Train the model with `dataset` with mini-batch training. Each
        mini-batch has `batch_size` recordings.
@@ -195,6 +207,7 @@ def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
             'valid_accuracy': avg_valid_accuracy,
         }
 
+
 def main(num_epochs=NUM_EPOCHS):
     print("Loading data...")
     dataset = load_data()
@@ -203,7 +216,8 @@ def main(num_epochs=NUM_EPOCHS):
     output_layer = build_model(
         output_dim=dataset['output_dim'],
         batch_size=BATCH_SIZE,
-        num_features=dataset['num_features']
+        seq_len=None,
+        n_features=dataset['n_fea']
         )
 
     iter_funcs = create_iter_functions(
@@ -211,22 +225,28 @@ def main(num_epochs=NUM_EPOCHS):
         output_layer,
         )
 
+    results = []
     print("Starting training...")
     now = time.time()
     try:
         for epoch in train(iter_funcs, dataset):
-            print("Epoch {} of {} took {:.3f}s".format(
-                epoch['number'], num_epochs, time.time() - now))
+            print("{}: epoch {} of {} took {:.3f}s | training loss: {:.6f} "
+                  "| validation loss: {:.6f} | validation accuracy: {:.2f} %%".
+                  format(NAME, epoch['number'], num_epochs, time.time() - now, epoch['train_loss'],
+                         epoch['valid_loss'], epoch['valid_accuracy'] * 100))
             now = time.time()
-            print("  training loss:\t\t{:.6f}".format(epoch['train_loss']))
-            print("  validation loss:\t\t{:.6f}".format(epoch['valid_loss']))
-            print("  validation accuracy:\t\t{:.2f} %%".format(
-                epoch['valid_accuracy'] * 100))
+
+            results.append([epoch['train_loss'], epoch['valid_loss'], epoch['valid_accuracy']])
 
             if epoch['train_loss'] is np.nan:
                 break
             if epoch['number'] >= num_epochs:
                 break
+        # Save figure
+        ax = pd.DataFrame(np.asarray(results), columns=['Training loss', 'Validation loss', 'Validation accuracy'])\
+            .plot()
+        fig = ax.get_figure()
+        fig.savefig("%s-%s" % (NAME, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
 
     except KeyboardInterrupt:
         pass

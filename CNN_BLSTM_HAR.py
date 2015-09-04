@@ -1,5 +1,9 @@
 from __future__ import print_function
 
+import theano.sandbox.cuda
+theano.sandbox.cuda.use('gpu2')
+
+import os
 import theano
 import theano.tensor as T
 import lasagne
@@ -9,12 +13,13 @@ import lasagne.updates
 import itertools
 import time
 import pandas as pd
-#import matplotlib.pyplot as plt
+import datetime
+import matplotlib
+matplotlib.use("Agg")
 
-# Number of input units (window samples)
-N_UNITS = 128
+NAME ="CNN_BLSTM"
 # Number of units in the hidden (recurrent) layer
-N_HIDDEN = 200
+N_HIDDEN = 100
 # Number of training sequences in each batch
 BATCH_SIZE = 100
 # Number of features
@@ -22,7 +27,7 @@ N_FEATURES = 3
 # Optimization learning rate
 LEARNING_RATE = .001
 # All gradients above this will be clipped
-GRAD_CLIP = 100
+GRAD_CLIP = 5
 # How often should we check the output?
 EPOCH_SIZE = 100
 # Number of epochs to train the net
@@ -35,8 +40,11 @@ INPUT_DROPOUT = 0.2
 CONST_FORGET_B = 1.
 
 # Path to HAR data
-# ROOT_FOLDER = 'D:/PhD/Data/activity/'
-ROOT_FOLDER = '/home/sdka/data/activity'
+if 'nt' in os.name:
+    ROOT_FOLDER = 'D:/PhD/Data/activity/'
+else:
+    ROOT_FOLDER = '/home/sdka/data/activity'
+
 
 # Expand the target to all time steps
 def expand_target(y, length):
@@ -44,21 +52,21 @@ def expand_target(y, length):
 
 
 def load_data():
-    data = ld.LoadHAR(ROOT_FOLDER).uci_har_v1()
+    data = ld.LoadHAR(ROOT_FOLDER).uci_har_v1(add_pitch=False, add_roll=False)
 
     return dict(
         output_dim=int(data['y_test'].shape[-1]),
         X_train=theano.shared(data['x_train'].astype(theano.config.floatX)),
         y_train=theano.shared(
-            expand_target(data['y_train'], N_UNITS).astype(theano.config.floatX)
+            expand_target(data['y_train'], 0).astype(theano.config.floatX)
         ),
         X_valid=theano.shared(data['x_test'].astype(theano.config.floatX)),
         y_valid=theano.shared(
-            expand_target(data['y_test'], N_UNITS).astype(theano.config.floatX)
+            expand_target(data['y_test'], 0).astype(theano.config.floatX)
         ),
         X_test=theano.shared(data['x_test'].astype(theano.config.floatX)),
         y_test=theano.shared(
-            expand_target(data['y_test'], N_UNITS).astype(theano.config.floatX)
+            expand_target(data['y_test'], 0).astype(theano.config.floatX)
         ),
         num_examples_train=data['x_train'].shape[0],
         num_examples_valid=data['x_test'].shape[0],
@@ -68,39 +76,49 @@ def load_data():
         )
 
 
-def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
+def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=N_FEATURES):
+    x = np.random.random((batch_size, seq_len, n_features)).astype(theano.config.floatX)
+    sym_x = T.tensor3('x')
+
     print("Building network ...")
     # First, we build the network, starting with an input layer
     # Recurrent layers expect input of shape
     # (batch size, max sequence length, number of features)
     l_in = lasagne.layers.InputLayer(
-        shape=(batch_size, seq_len, N_FEATURES)
+        shape=(batch_size, seq_len, n_features)
     )
+    print("Input shape", lasagne.layers.get_output(l_in, sym_x).eval({sym_x: x}).shape)
 
     # Input dropout for regularization
-    l = lasagne.layers.dropout(l_in, p=INPUT_DROPOUT)
+    l_in = lasagne.layers.dropout(l_in, p=INPUT_DROPOUT)
+
+    # Reshape to a single sample dimension
+    # l_reshp = lasagne.layers.ReshapeLayer(l_in, (batch_size, seq_len*n_features, 1))
 
     # Reshape layer for convolution
-    l = lasagne.layers.DimshuffleLayer(l, (0, 2, 1))
-
-    # Pad to keep original sequence length. Each conv layers takes 2 samples
-    l_pad = lasagne.layers.PadLayer(l, 2)
+    l_dim = lasagne.layers.DimshuffleLayer(l_in, (0, 2, 1))
+    print("Conv input shape", lasagne.layers.get_output(l_dim, sym_x).eval({sym_x: x}).shape)
 
     # Convolution layers. Convolution, pooling and dropout
-    l_conv = lasagne.layers.Conv1DLayer(l_pad,  num_filters=24, filter_size=3)
-    l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
-    l_conv = lasagne.layers.Conv1DLayer(l_pool, num_filters=48, filter_size=3)
-    l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
-    l_conv = lasagne.layers.Conv1DLayer(l_pool, num_filters=96, filter_size=3)
-    l_conv = lasagne.layers.Conv1DLayer(l_conv, num_filters=96, filter_size=3)
+    l_conv = lasagne.layers.Conv1DLayer(l_dim,  num_filters=10, filter_size=3, stride=1, pad=1, nonlinearity=None)
     l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
 
+    l_conv2 = lasagne.layers.Conv1DLayer(l_dim,  num_filters=10, filter_size=3, stride=1, pad=1)
+    l_pool2 = lasagne.layers.MaxPool1DLayer(l_conv2, pool_size=2)
+
+    l_concat = lasagne.layers.ConcatLayer([l_pool, l_pool2], axis=1)
+
+    # l_conv3 = lasagne.layers.Conv1DLayer(l_concat,  num_filters=10, filter_size=3, stride=1, pad=1, nonlinearity=None)
+    print("Conv output shape", lasagne.layers.get_output(l_concat, sym_x).eval({sym_x: x}).shape)
+
     # Reshape layer back to normal
-    l = lasagne.layers.DimshuffleLayer(l, (0, 2, 1))
+    l_dim = lasagne.layers.DimshuffleLayer(l_concat, (0, 2, 1))
+    # l_reshp = lasagne.layers.ReshapeLayer(l_dim, (batch_size, 64, -1))
+    print("BLSTM input shape", lasagne.layers.get_output(l_dim, sym_x).eval({sym_x: x}).shape)
 
     # BLSTM layers
     l_forward = lasagne.layers.LSTMLayer(
-        l,
+        l_dim,
         num_units=N_HIDDEN/2,
         ingate=lasagne.layers.Gate(
             W_in=lasagne.init.HeUniform(),
@@ -112,7 +130,7 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
         )
     )
     l_backward = lasagne.layers.LSTMLayer(
-        l,
+        l_dim,
         num_units=N_HIDDEN/2,
         ingate=lasagne.layers.Gate(
             W_in=lasagne.init.HeUniform(),
@@ -125,6 +143,7 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
         backwards=True
     )
 
+    # 2nd BLSTM Layer
     l_cat = lasagne.layers.ConcatLayer(
         [l_forward, l_backward],
         axis=2
@@ -156,6 +175,39 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
         backwards=True
     )
 
+    # 3rd BLSTM Layer
+    l_cat = lasagne.layers.ConcatLayer(
+        [l_forward, l_backward],
+        axis=2
+    )
+
+    l_forward = lasagne.layers.LSTMLayer(
+        l_cat,
+        num_units=N_HIDDEN/2,
+        ingate=lasagne.layers.Gate(
+            W_in=lasagne.init.HeUniform(),
+            W_hid=lasagne.init.HeUniform()
+        ),
+        grad_clipping=GRAD_CLIP,
+        forgetgate=lasagne.layers.Gate(
+            b=lasagne.init.Constant(CONST_FORGET_B)
+        )
+    )
+    l_backward = lasagne.layers.LSTMLayer(
+        l_cat,
+        num_units=N_HIDDEN/2,
+        ingate=lasagne.layers.Gate(
+            W_in=lasagne.init.HeUniform(),
+            W_hid=lasagne.init.HeUniform()
+        ),
+        grad_clipping=GRAD_CLIP,
+        forgetgate=lasagne.layers.Gate(
+            b=lasagne.init.Constant(CONST_FORGET_B)
+        ),
+        backwards=True
+    )
+
+    # Select the last values
     l_forward_slice = lasagne.layers.SliceLayer(l_forward, -1, 1)
     l_backward_slice = lasagne.layers.SliceLayer(l_backward, 0, 1)
 
@@ -163,6 +215,7 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
         [l_forward_slice, l_backward_slice],
         axis=1
     )
+    print("BLSTM output shape", lasagne.layers.get_output(l_cat2, sym_x).eval({sym_x: x}).shape)
 
     # Our output layer is a simple dense connection, with n_classes output unit
     l_out = lasagne.layers.DenseLayer(
@@ -170,6 +223,7 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None):
         num_units=output_dim,
         nonlinearity=lasagne.nonlinearities.softmax
     )
+    print("Network output shape", lasagne.layers.get_output(l_out, sym_x).eval({sym_x: x}).shape)
 
     return l_out
 
@@ -208,11 +262,11 @@ def create_iter_functions(dataset, output_layer,
     )
 
     all_params = lasagne.layers.get_all_params(output_layer)
-    updates = lasagne.updates.rmsprop(
+    updates = lasagne.updates.nesterov_momentum(
         loss_train,
         all_params,
-        learning_rate=0.002,
-        rho=0.95
+        learning_rate=0.001,
+        momentum=0.9
     )
 
     iter_train = theano.function(
@@ -278,15 +332,18 @@ def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
             'valid_accuracy': avg_valid_accuracy,
         }
 
+
 def main(num_epochs=NUM_EPOCHS):
     print("Loading data...")
     dataset = load_data()
+    print("Target shape", dataset['y_train'].shape)
 
     print("Building model and compiling functions...")
     output_layer = build_model(
         output_dim=dataset['output_dim'],
         batch_size=BATCH_SIZE,
-        seq_len=dataset['seq_len']
+        seq_len=dataset['seq_len'],
+        n_features=dataset['n_fea']
         )
 
     iter_funcs = create_iter_functions(
@@ -299,26 +356,29 @@ def main(num_epochs=NUM_EPOCHS):
     now = time.time()
     try:
         for epoch in train(iter_funcs, dataset):
-            print("Epoch {} of {} took {:.3f}s".format(
-                epoch['number'], num_epochs, time.time() - now))
+            print("{}: epoch {} of {} took {:.3f}s | training loss: {:.6f} "
+                  "| validation loss: {:.6f} | validation accuracy: {:.2f} %".
+                  format(NAME, epoch['number'], num_epochs, time.time() - now, epoch['train_loss'],
+                         epoch['valid_loss'], epoch['valid_accuracy'] * 100))
             now = time.time()
-            print("  training loss:\t\t{:.6f}".format(epoch['train_loss']))
-            print("  validation loss:\t\t{:.6f}".format(epoch['valid_loss']))
-            print("  validation accuracy:\t\t{:.2f} %%".format(
-                epoch['valid_accuracy'] * 100))
+
             results.append([epoch['train_loss'], epoch['valid_loss'], epoch['valid_accuracy']])
 
             if epoch['train_loss'] is np.nan:
                 break
             if epoch['number'] >= num_epochs:
                 break
-        df = pd.DataFrame(np.asarray(results), columns=['Training loss', 'Validation loss', 'Validation accuracy'])
+        # Save figure
+        ax = pd.DataFrame(np.asarray(results), columns=['Training loss', 'Validation loss', 'Validation accuracy'])\
+            .plot()
+        fig = ax.get_figure()
+        fig.savefig("%s-%s" % (NAME, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
+
     except KeyboardInterrupt:
         pass
 
-    return output_layer, df
+    return output_layer
 
 if __name__ == '__main__':
-    output_layer, df = main()
-    #df.plot()
-    #plt.show()
+    output_layer = main()
+

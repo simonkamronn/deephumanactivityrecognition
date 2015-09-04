@@ -11,6 +11,7 @@ import numpy as np
 from scipy.io import loadmat
 from sklearn.cross_validation import StratifiedShuffleSplit
 import itertools
+from utils import roll, pitch
 
 class LoadHAR(object):
     def __init__(self, root_folder=None):
@@ -18,7 +19,11 @@ class LoadHAR(object):
         if root_folder is None:
             raise RuntimeError('Invalid folder')
 
-    def uci_har_v1(self):
+    def uci_har_v1(self, add_pitch=False, add_roll=False):
+        """
+        Data from Ortiz
+        :return:
+        """
         sub_folder = '/UCI/UCI HAR Dataset v1/'
         test_folder = self.root_folder + sub_folder + 'test/'
         train_folder = self.root_folder + sub_folder + 'train/'
@@ -41,12 +46,35 @@ class LoadHAR(object):
         data['x_test_features'] = pd.read_csv(test_folder + 'X_test.txt', sep=r'\s+').values
         data['x_train_features'] = pd.read_csv(train_folder + 'X_train.txt', sep=r'\s+').values
 
+        data_mean = np.mean((data['x_test'].mean(), data['x_train'].mean()))
+        data_std = np.mean((data['x_test'].std(), data['x_train'].std()))
+
+        print("Data mean: %f, Data std: %f" % (data_mean, data_std))
+
         # Downsample to 64 samples per window i.e. 25Hz
         ratio = 2
         for key in ['x_test', 'x_train']:
             n_win, n_samp, n_dim = data[key].shape
-            data[key] = downsample(data[key].reshape(-1, n_dim), ratio=ratio).\
-                reshape(n_win, n_samp/ratio, n_dim)
+            if ratio > 1:
+                data[key] = downsample(data[key].reshape(-1, n_dim), ratio=ratio).\
+                    reshape(n_win, n_samp/ratio, n_dim)
+
+            # Data normalisation
+            data[key] = data[key] - data_mean
+            data[key] = data[key]/data_std
+
+            # Add pitch and roll
+            if add_pitch:
+                pitches = []
+                for i in range(n_win):
+                    pitches.append(pitch(data[key][i]))
+                data[key] = np.concatenate((data[key], pitches), axis=2)
+
+            if add_roll:
+                rolls = []
+                for i in range(n_win):
+                    rolls.append(roll(data[key][i,:,:3]))
+                data[key] = np.concatenate((data[key], rolls), axis=2)
 
         return data
 
@@ -64,7 +92,7 @@ class LoadHAR(object):
         sub_folder = 'UCI/Opportunity/dataset/'
         pass
 
-    def mhealth(self):
+    def uci_mhealth(self):
         sub_folder = 'UCI/mHealth/'
 
         # Load the first subject and then the rest iteratively
@@ -118,8 +146,6 @@ class LoadHAR(object):
                     target.append(np.ones((tmp.shape[0],), dtype=np.int)*idx)
         target = np.asarray(list(itertools.chain.from_iterable(target)))
 
-        print(tmp_seg.shape)
-        print(target.shape)
         data = dict()
         for train_index, test_index in StratifiedShuffleSplit(target,
                                                               n_iter=1,
@@ -133,6 +159,14 @@ class LoadHAR(object):
     def pamap2(self):
         pass
 
+    def mhealth_maninni(self):
+        """
+        Data from Stanford/MIT. Unfortunately they only provide a magnitude vector
+        Subjects: 33
+        """
+        sub_folder = 'mhealth/Mannini_Data_and_Code_PMC2015/Data/'
+        data = loadmat(glob.glob(self.root_folder + sub_folder + '*.mat')[0])
+        X = data['Data_m']
 
 def one_hot(labels, n_classes=None):
     """

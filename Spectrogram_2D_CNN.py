@@ -1,96 +1,72 @@
-import numpy as np 
+import theano.sandbox.cuda
+theano.sandbox.cuda.use('gpu1')
+
+import numpy as np
 import theano
 import theano.tensor as T
 import lasagne
-from lasagne import nonlinearities
 import lasagne.updates
 import itertools
-import scipy.io as sio
 import time
-import matplotlib.pyplot as plt
+import datetime
 import pandas as pd
-from glob import glob
-from matplotlib.mlab import specgram
 
+import utils
+import load_data as ld
+import os
 
-BATCH_SIZE = 500
-LEARNING_RATE = 0.01
+import matplotlib
+matplotlib.use("Agg")
+# import matplotlib.pyplot as plt
+
+BATCH_SIZE = 100
+LEARNING_RATE = 0.001
 MOMENTUM = 0.9
 WEIGHT_DECAY = 0.0
-NUM_HIDDEN_UNITS = 512
 
 DROPOUT = 0.5
 INPUTDROPOUT = 0.2
 NUM_EPOCHS = 1000
 # SOFTMAX_LAMBDA = 0.01
 
-# calculate the magnitude of the accelerometer
-def magnitude(x_in):
-    return np.sqrt((x_in*x_in).sum(axis=1))
+NAME = "2D_CNN"
 
-def spectro_conv(X):
-    """
-    Convert array of epoched accelerometer time series to spectrograms
-    :param X: accelerometer data of dim samples x channels x window length
-    :return: spectrogram of dim samples x 24 x 24 where channels are concatenated
-    """
-    X = X[:, 5:8]  # Only use 3 acc channels
-    N_BINS = 16
-    N_WIN, N_FEA, N_SAMP = X.shape
-    NFFT = 128
-    noverlap = NFFT - N_SAMP/N_BINS
-    # X = magnitude(np.swapaxes(X[:, 0:3, :], 1, 2).reshape(-1, 3))
-    # X = 10. * np.log10(specgram(np.pad(X, pad_width=NFFT/2-1, mode='constant'), NFFT=NFFT, noverlap=noverlap)[0])
-    # X = X.reshape(NFFT/2+1, 1, N_WIN, N_SAMP/(NFFT-noverlap)).swapaxes(0, 2)[:, :, :NFFT/2]
+# Path to HAR data
+if 'nt' in os.name:
+    ROOT_FOLDER = 'D:/PhD/Data/activity/'
+else:
+    ROOT_FOLDER = '/home/sdka/data/activity'
 
-    ptt = lambda x: 10. * np.log10(specgram(np.pad(x.reshape(-1), pad_width=NFFT/2-1, mode='constant'),
-                                            NFFT=NFFT,
-                                            noverlap=noverlap)[0])
-    X = np.array([ptt(x) for x in np.swapaxes(X, 0, 1)])
-    X = np.reshape(X[:, :3*N_BINS], [N_FEA, N_FEA*N_BINS, N_WIN, N_BINS]).swapaxes(0, 2).reshape([N_WIN, 1, N_FEA*N_BINS, N_FEA*N_BINS])
-    X = X - np.mean(X)
-    return X
-
-to_bool = lambda x: np.asarray(x, dtype=np.bool)
-
-data_path = 'data/Human Activity Recognition Using Smartphones Data Set V1/'
-# files = glob(data_path + '/train/Inertial Signals/body_acc_*')
-# Xtrain = pd.read_csv(files[0], sep=r'\s+')
 
 
 def load_data():
-    # LOAD DATA
-    data = sio.loadmat('data/UCI_HAR_data.mat')
-
-    X_train = spectro_conv(data['x_train'])
-    y_train = pd.read_csv(data_path + '/train/y_train.txt', squeeze=True).values - 1
-#    y_train = data['y_train']
-
-    X_valid = spectro_conv(data['x_test'])
-    y_valid = pd.read_csv(data_path + '/test/y_test.txt', squeeze=True).values - 1
-#    y_valid = data['y_test'];
-    
-    X_test = X_valid
-    y_test = y_valid
+    data = ld.LoadHAR(ROOT_FOLDER).uci_har_v1()
+    x_test = utils.spectrogram_2d(utils.magnitude(data['x_test'])).astype(theano.config.floatX)
 
     return dict(
-        output_dim=int(np.unique(y_test).shape[0]),
-        X_train=theano.shared(lasagne.utils.floatX(X_train)),
-        y_train=T.cast(theano.shared(y_train), 'int32'),
-        X_valid=theano.shared(lasagne.utils.floatX(X_valid)),
-        y_valid=T.cast(theano.shared(y_valid), 'int32'),
-        X_test=theano.shared(lasagne.utils.floatX(X_test)),
-        y_test=T.cast(theano.shared(y_test), 'int32'),
-        num_examples_train=X_train.shape[0],
-        num_examples_valid=X_valid.shape[0],
-        num_examples_test=X_test.shape[0],
-        input_height=X_train.shape[2],
-        input_width=X_train.shape[3],
+        output_dim=int(data['y_test'].shape[-1]),
+        X_train=theano.shared(utils.spectrogram_2d(utils.magnitude(data['x_train'])).astype(theano.config.floatX)),
+        y_train=theano.shared(
+            data['y_train'].astype(theano.config.floatX)
+        ),
+        X_valid=theano.shared(x_test),
+        y_valid=theano.shared(
+            data['y_test'].astype(theano.config.floatX)
+        ),
+        X_test=theano.shared(x_test),
+        y_test=theano.shared(
+            data['y_test'].astype(theano.config.floatX)
+        ),
+        num_examples_train=data['x_train'].shape[0],
+        num_examples_valid=data['x_test'].shape[0],
+        num_examples_test=data['x_test'].shape[0],
+        seq_len=int(x_test.shape[1]),
+        input_width=x_test.shape[2],
+        input_height=x_test.shape[3]
         )
 
 
-def build_model(input_width, input_height, output_dim,
-                batch_size=BATCH_SIZE):
+def build_model(input_width, input_height, output_dim, batch_size=BATCH_SIZE):
     l_in = lasagne.layers.InputLayer(
         shape=(batch_size, 1, input_width, input_height),
         )
@@ -99,66 +75,53 @@ def build_model(input_width, input_height, output_dim,
 
     l_conv1 = lasagne.layers.Conv2DLayer(
         l_in,
-        num_filters=64,
+        num_filters=24,
         filter_size=(3, 3),
         nonlinearity=lasagne.nonlinearities.rectify,
         W=lasagne.init.GlorotUniform(),
         )
-
-    l_conv1_2 = lasagne.layers.Conv2DLayer(
-        l_conv1,
-        num_filters=64,
-        filter_size=(3, 3),
-        nonlinearity=lasagne.nonlinearities.rectify,
-        W=lasagne.init.GlorotUniform(),
-        )
-    l_pool1 = lasagne.layers.MaxPool2DLayer(l_conv1_2, pool_size=(2, 2))
 
     l_conv2 = lasagne.layers.Conv2DLayer(
-        l_pool1,
-        num_filters=128,
+        l_conv1,
+        num_filters=24,
         filter_size=(3, 3),
         nonlinearity=lasagne.nonlinearities.rectify,
         W=lasagne.init.GlorotUniform(),
         )
 
-    l_conv2_2 = lasagne.layers.Conv2DLayer(
+    l_conv3 = lasagne.layers.Conv2DLayer(
         l_conv2,
-        num_filters=128,
+        num_filters=48,
         filter_size=(3, 3),
         nonlinearity=lasagne.nonlinearities.rectify,
         W=lasagne.init.GlorotUniform(),
         )
-    l_pool2 = lasagne.layers.MaxPool2DLayer(l_conv2_2, pool_size=(2, 2))
 
-    # l_conv3 = lasagne.layers.Conv2DLayer(
-    #     l_pool2,
-    #     num_filters=256,
-    #     filter_size=(3, 3),
-    #     nonlinearity=lasagne.nonlinearities.rectify,
-    #     W=lasagne.init.GlorotUniform(),
-    #     )
-    #
-    # l_conv3_2 = lasagne.layers.Conv2DLayer(
-    #     l_conv3,
-    #     num_filters=256,
-    #     filter_size=(3, 3),
-    #     nonlinearity=lasagne.nonlinearities.rectify,
-    #     W=lasagne.init.GlorotUniform(),
-    #     )
-    # l_pool3 = lasagne.layers.MaxPool2DLayer(l_conv3_2, pool_size=(2, 2))
+    l_conv4 = lasagne.layers.Conv2DLayer(
+        l_conv3,
+        num_filters=48,
+        filter_size=(3, 3),
+        nonlinearity=lasagne.nonlinearities.rectify,
+        W=lasagne.init.GlorotUniform(),
+        )
+    l_pool = lasagne.layers.Pool2DLayer(l_conv4, pool_size=(2, 2))
+
+    x = np.random.random((batch_size, 1, input_width, input_height)).astype(theano.config.floatX)
+    sym_x = T.tensor4('x')
+    model = lasagne.layers.get_output(l_pool, sym_x)
+    out = model.eval({sym_x: x})
+    print("out shape", out.shape)
 
     l_hidden1 = lasagne.layers.DenseLayer(
-        l_pool2,
+        l_pool,
         num_units=512,
         nonlinearity=lasagne.nonlinearities.rectify,
         W=lasagne.init.GlorotUniform(),
         )
-    l_hidden1_dropout = lasagne.layers.DropoutLayer(l_hidden1, p=DROPOUT)
 
     l_hidden2 = lasagne.layers.DenseLayer(
-        l_hidden1_dropout,
-        num_units=256,
+        l_hidden1,
+        num_units=512,
         nonlinearity=lasagne.nonlinearities.rectify,
         )
     l_hidden2_dropout = lasagne.layers.DropoutLayer(l_hidden2, p=0.5)
@@ -172,6 +135,11 @@ def build_model(input_width, input_height, output_dim,
 
     return l_out
 
+
+def cross_ent_cost(predicted_values, target_values):
+    return -T.sum(target_values*T.log(predicted_values + 1e-8))/T.sum(target_values)
+
+
 def create_iter_functions(dataset, output_layer,
                           X_tensor_type=T.matrix,
                           batch_size=BATCH_SIZE,
@@ -181,26 +149,31 @@ def create_iter_functions(dataset, output_layer,
     """
     batch_index = T.iscalar('batch_index')
     X_batch = X_tensor_type('x')
-    y_batch = T.ivector('y')
+    y_batch = T.matrix('y')
     batch_slice = slice(batch_index * batch_size,
                         (batch_index + 1) * batch_size)
 
-    objective = lasagne.objectives.Objective(output_layer,
-        loss_function=lasagne.objectives.categorical_crossentropy)
-
-    loss_train = objective.get_loss(X_batch, target=y_batch)
-    loss_eval = objective.get_loss(X_batch, target=y_batch,
-                                   deterministic=True)
-
-    pred = T.argmax(
+    prediction = T.argmax(
         lasagne.layers.get_output(output_layer, X_batch, deterministic=True),
-        axis=1)
-    accuracy = T.mean(T.eq(pred, y_batch), dtype=theano.config.floatX)
+        axis=-1
+    )
+    accuracy = T.mean(T.eq(prediction, T.argmax(y_batch, axis=-1)), dtype=theano.config.floatX)
+
+    loss_train = cross_ent_cost(
+        lasagne.layers.get_output(output_layer, X_batch, deterministic=False),
+        y_batch
+    )
+
+    loss_eval = cross_ent_cost(
+        lasagne.layers.get_output(output_layer, X_batch, deterministic=True),
+        y_batch
+    )
 
     all_params = lasagne.layers.get_all_params(output_layer)
-    updates = lasagne.updates.nesterov_momentum(
-        loss_train, all_params, learning_rate, momentum)
-    # updates = lasagne.updates.adagrad(cost, all_params, LEARNING_RATE)
+    updates = lasagne.updates.adam(
+        loss_train,
+        all_params,
+        learning_rate=learning_rate)
 
     iter_train = theano.function(
         [batch_index], loss_train,
@@ -284,20 +257,29 @@ def main(num_epochs=NUM_EPOCHS):
         X_tensor_type=T.tensor4,
         )
 
+    results = []
     print("Starting training...")
     now = time.time()
     try:
         for epoch in train(iter_funcs, dataset):
-            print("Epoch {} of {} took {:.3f}s".format(
-                epoch['number'], num_epochs, time.time() - now))
-            now = time.time()
-            print("  training loss:\t\t{:.6f}".format(epoch['train_loss']))
-            print("  validation loss:\t\t{:.6f}".format(epoch['valid_loss']))
-            print("  validation accuracy:\t\t{:.2f} %%".format(
-                epoch['valid_accuracy'] * 100))
+            print("{}: epoch {} of {} took {:.3f}s | training loss: {:.6f} "
+                  "| validation loss: {:.6f} | validation accuracy: {:.2f} %%".
+                  format(NAME, epoch['number'], num_epochs, time.time() - now, epoch['train_loss'],
+                         epoch['valid_loss'], epoch['valid_accuracy'] * 100))
 
+            results.append([epoch['train_loss'], epoch['valid_loss'], epoch['valid_accuracy']])
+
+            now = time.time()
+            if epoch['train_loss'] is np.nan:
+                break
             if epoch['number'] >= num_epochs:
                 break
+
+        # Save figure
+        ax = pd.DataFrame(np.asarray(results), columns=['Training loss', 'Validation loss', 'Validation accuracy'])\
+            .plot()
+        fig = ax.get_figure()
+        fig.savefig("%s-%s" % (NAME, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
 
     except KeyboardInterrupt:
         pass
