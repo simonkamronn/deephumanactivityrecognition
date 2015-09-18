@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import theano.sandbox.cuda
-theano.sandbox.cuda.use('gpu2')
+theano.sandbox.cuda.use('gpu1')
 
 import os
 import theano
@@ -31,7 +31,7 @@ GRAD_CLIP = 5
 # How often should we check the output?
 EPOCH_SIZE = 100
 # Number of epochs to train the net
-NUM_EPOCHS = 500
+NUM_EPOCHS = 300
 # Momentum
 MOMENTUM = 0.9
 DROPOUT = 0.5
@@ -89,30 +89,22 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=N_FE
     )
     print("Input shape", lasagne.layers.get_output(l_in, sym_x).eval({sym_x: x}).shape)
 
-    # Input dropout for regularization
-    l_in = lasagne.layers.dropout(l_in, p=INPUT_DROPOUT)
+    l_reshp = lasagne.layers.ReshapeLayer(l_in, (batch_size, 1, seq_len, n_features))
+    # Subsample signal with averaging
+    l_sub_samp = lasagne.layers.Pool2DLayer(l_reshp, pool_size=(2, 1), mode='average_inc_pad')
+    print("Conv2D temporal feature shape", lasagne.layers.get_output(l_sub_samp, sym_x).eval({sym_x: x}).shape)
 
-    # Reshape to a single sample dimension
-    # l_reshp = lasagne.layers.ReshapeLayer(l_in, (batch_size, seq_len*n_features, 1))
-
-    # Reshape layer for convolution
-    l_dim = lasagne.layers.DimshuffleLayer(l_in, (0, 2, 1))
-    print("Conv input shape", lasagne.layers.get_output(l_dim, sym_x).eval({sym_x: x}).shape)
-
-    # Convolution layers. Convolution, pooling and dropout
-    l_conv = lasagne.layers.Conv1DLayer(l_dim,  num_filters=10, filter_size=3, stride=1, pad=1, nonlinearity=None)
-    l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
-
-    l_conv2 = lasagne.layers.Conv1DLayer(l_dim,  num_filters=10, filter_size=3, stride=1, pad=1)
-    l_pool2 = lasagne.layers.MaxPool1DLayer(l_conv2, pool_size=2)
-
-    l_concat = lasagne.layers.ConcatLayer([l_pool, l_pool2], axis=1)
-
-    # l_conv3 = lasagne.layers.Conv1DLayer(l_concat,  num_filters=10, filter_size=3, stride=1, pad=1, nonlinearity=None)
-    print("Conv output shape", lasagne.layers.get_output(l_concat, sym_x).eval({sym_x: x}).shape)
+    l_reshp = lasagne.layers.ReshapeLayer(l_sub_samp, (batch_size, 1, seq_len/2, n_features))
+    l_conv = lasagne.layers.Conv2DLayer(l_reshp, num_filters=64, filter_size=(5, 1), stride=(1, 1))
+    l_pool = lasagne.layers.MaxPool2DLayer(l_conv, pool_size=(2, 1))
+    l_conv = lasagne.layers.Conv2DLayer(l_pool, num_filters=64, filter_size=(5, 1), stride=(1, 1))
+    l_pool = lasagne.layers.MaxPool2DLayer(l_conv, pool_size=(2, 1))
+    l_conv = lasagne.layers.Conv2DLayer(l_pool, num_filters=64, filter_size=(3, 1), stride=(1, 1))
+    l_pool = lasagne.layers.MaxPool2DLayer(l_conv, pool_size=(2, 1))
+    print("Conv output shape", lasagne.layers.get_output(l_pool, sym_x).eval({sym_x: x}).shape)
 
     # Reshape layer back to normal
-    l_dim = lasagne.layers.DimshuffleLayer(l_concat, (0, 2, 1))
+    l_dim = lasagne.layers.DimshuffleLayer(l_pool, (0, 2, 1))
     # l_reshp = lasagne.layers.ReshapeLayer(l_dim, (batch_size, 64, -1))
     print("BLSTM input shape", lasagne.layers.get_output(l_dim, sym_x).eval({sym_x: x}).shape)
 
@@ -262,11 +254,11 @@ def create_iter_functions(dataset, output_layer,
     )
 
     all_params = lasagne.layers.get_all_params(output_layer)
-    updates = lasagne.updates.nesterov_momentum(
+    updates = lasagne.updates.rmsprop(
         loss_train,
         all_params,
-        learning_rate=0.001,
-        momentum=0.9
+        learning_rate=0.002,
+        rho=0.95
     )
 
     iter_train = theano.function(
@@ -299,6 +291,7 @@ def create_iter_functions(dataset, output_layer,
         valid=iter_valid,
         test=iter_test,
     )
+
 
 def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
     """Train the model with `dataset` with mini-batch training. Each
@@ -336,7 +329,6 @@ def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
 def main(num_epochs=NUM_EPOCHS):
     print("Loading data...")
     dataset = load_data()
-    print("Target shape", dataset['y_train'].shape)
 
     print("Building model and compiling functions...")
     output_layer = build_model(

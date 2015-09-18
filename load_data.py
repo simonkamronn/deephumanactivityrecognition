@@ -4,17 +4,24 @@ Load data from different Activity Recognition databases.
 Each method returns a data dict with train and test data, i.e. 'x_test', 'y_test'
 with the shape of n_batch x samples x features
 '''
-
+import theano
+import os
 import pandas as pd
 import glob as glob
 import numpy as np
 from scipy.io import loadmat
 from sklearn.cross_validation import StratifiedShuffleSplit
 import itertools
-from utils import roll, pitch
+from har_utils import roll, pitch
+
+# Path to HAR data
+if 'nt' in os.name:
+    ROOT_FOLDER = 'D:/PhD/Data/activity/'
+else:
+    ROOT_FOLDER = '/home/sdka/data/activity/'
 
 class LoadHAR(object):
-    def __init__(self, root_folder=None):
+    def __init__(self, root_folder=ROOT_FOLDER):
         self.root_folder = root_folder
         if root_folder is None:
             raise RuntimeError('Invalid folder')
@@ -43,8 +50,11 @@ class LoadHAR(object):
         data['y_train'] = one_hot(pd.read_csv(train_folder + 'y_train.txt', squeeze=True).values - 1)
         data['y_test'] = one_hot(pd.read_csv(test_folder + 'y_test.txt', squeeze=True).values - 1)
 
-        data['x_test_features'] = pd.read_csv(test_folder + 'X_test.txt', sep=r'\s+').values
-        data['x_train_features'] = pd.read_csv(train_folder + 'X_train.txt', sep=r'\s+').values
+        # Load precomputed features
+        features = pd.read_csv(self.root_folder + sub_folder + "/features.txt", header=None, sep=";", names=['features'], squeeze=True).str.strip()
+        features_filt = features[features.str.contains(r't\w*Acc')]
+        data['x_test_features'] = pd.read_csv(test_folder + 'X_test.txt', sep=r'\s+', names=features)[features_filt].values
+        data['x_train_features'] = pd.read_csv(train_folder + 'X_train.txt', sep=r'\s+', names=features)[features_filt].values
 
         data_mean = np.mean((data['x_test'].mean(), data['x_train'].mean()))
         data_std = np.mean((data['x_test'].std(), data['x_train'].std()))
@@ -52,7 +62,7 @@ class LoadHAR(object):
         print("Data mean: %f, Data std: %f" % (data_mean, data_std))
 
         # Downsample to 64 samples per window i.e. 25Hz
-        ratio = 2
+        ratio = 1
         for key in ['x_test', 'x_train']:
             n_win, n_samp, n_dim = data[key].shape
             if ratio > 1:
@@ -76,7 +86,9 @@ class LoadHAR(object):
                     rolls.append(roll(data[key][i,:,:3]))
                 data[key] = np.concatenate((data[key], rolls), axis=2)
 
-        return data
+        return shared_dataset((data['x_train'], data['y_train'])), \
+               shared_dataset((data['x_test'], data['y_test'])), \
+               shared_dataset((data['x_test'], data['y_test']))
 
     def skoda(self):
         """
@@ -205,3 +217,9 @@ def window_segment(data, n_samples = 64):
     n_win = n_samp/n_samples
     data = np.reshape(data[:n_win*n_samples], (n_win, n_samples, n_dim))
     return data
+
+def shared_dataset(data_xy, borrow=True):
+    x, y = data_xy
+    shared_x = theano.shared(np.asarray(x, dtype=theano.config.floatX), borrow=borrow)
+    shared_y = theano.shared(np.asarray(y, dtype=theano.config.floatX), borrow=borrow)
+    return shared_x, shared_y

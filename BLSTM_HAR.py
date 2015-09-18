@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import theano.sandbox.cuda
-theano.sandbox.cuda.use('gpu2')
+theano.sandbox.cuda.use('gpu3')
 
 import os
 import theano

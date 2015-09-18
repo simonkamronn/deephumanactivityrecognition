@@ -20,7 +20,7 @@ import datetime
 import matplotlib
 matplotlib.use("Agg")
 
-NAME = "DNN"
+NAME = "DNN_Raw"
 # Number of input units (window samples)
 N_UNITS = 128
 # Number of units in the hidden (recurrent) layer
@@ -54,34 +54,34 @@ def load_data():
 
     return dict(
         output_dim=int(data['y_test'].shape[-1]),
-        X_train=theano.shared(data['x_train_features'].astype(theano.config.floatX)),
+        X_train=theano.shared(data['x_train'].astype(theano.config.floatX)),
         y_train=theano.shared(
             data['y_train'].astype(theano.config.floatX)
         ),
-        X_valid=theano.shared(data['x_test_features'].astype(theano.config.floatX)),
+        X_valid=theano.shared(data['x_test'].astype(theano.config.floatX)),
         y_valid=theano.shared(
             data['y_test'].astype(theano.config.floatX)
         ),
-        X_test=theano.shared(data['x_test_features'].astype(theano.config.floatX)),
+        X_test=theano.shared(data['x_test'].astype(theano.config.floatX)),
         y_test=theano.shared(
             data['y_test'].astype(theano.config.floatX)
         ),
         num_examples_train=data['x_train'].shape[0],
         num_examples_valid=data['x_test'].shape[0],
         num_examples_test=data['x_test'].shape[0],
-        n_fea=int(data['x_train_features'].shape[1])
+        n_fea=int(data['x_train'].shape[2]),
+        seq_len=int(data['x_train'].shape[1])
         )
 
 
 def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=N_FEATURES):
-    x = np.random.random((batch_size, n_features)).astype(theano.config.floatX)
-    sym_x = T.matrix('x')
     print("Building network ...")
     # First, we build the network, starting with an input layer
+    # Recurrent layers expect input of shape
+    # (batch size, max sequence length, number of features)
     l = lasagne.layers.InputLayer(
-        shape=(batch_size, n_features)
+        shape=(batch_size, seq_len, n_features)
     )
-    print("Input shape", lasagne.layers.get_output(l, sym_x).eval({sym_x: x}).shape)
 
     # Input dropout for regularization
     l = lasagne.layers.dropout(l, p=INPUT_DROPOUT)
@@ -90,6 +90,7 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=N_FE
     l = lasagne.layers.DenseLayer(l, num_units=128)
     l = lasagne.layers.DenseLayer(l, num_units=128)
     l = lasagne.layers.DenseLayer(l, num_units=128)
+
     # Dropout layer
     l = lasagne.layers.dropout(l, p=0.5)
 
@@ -115,7 +116,7 @@ def create_iter_functions(dataset, output_layer,
     Create functions for training, validation and testing to iterate one epoch.
     """
     batch_index = T.iscalar('batch_index')
-    X_batch = T.matrix('input')
+    X_batch = T.tensor3('input')
     y_batch = T.matrix('target_output')
     batch_slice = slice(batch_index * batch_size,
                         (batch_index + 1) * batch_size)
@@ -216,7 +217,7 @@ def main(num_epochs=NUM_EPOCHS):
     output_layer = build_model(
         output_dim=dataset['output_dim'],
         batch_size=BATCH_SIZE,
-        seq_len=None,
+        seq_len=dataset['seq_len'],
         n_features=dataset['n_fea']
         )
 
@@ -227,7 +228,6 @@ def main(num_epochs=NUM_EPOCHS):
         )
 
     results = []
-    max_accuracy = 0
     print("Starting training...")
     now = time.time()
     try:
@@ -240,14 +240,10 @@ def main(num_epochs=NUM_EPOCHS):
 
             results.append([epoch['train_loss'], epoch['valid_loss'], epoch['valid_accuracy']])
 
-            if epoch['valid_accuracy'] > max_accuracy:
-                max_accuracy = epoch['valid_accuracy']
             if epoch['train_loss'] is np.nan:
                 break
             if epoch['number'] >= num_epochs:
                 break
-
-        print("Max accuracy: %f" % max_accuracy)
         # Save figure
         ax = pd.DataFrame(np.asarray(results), columns=['Training loss', 'Validation loss', 'Validation accuracy'])\
             .plot()

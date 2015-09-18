@@ -19,7 +19,7 @@ matplotlib.use("Agg")
 
 NAME ="CNN_BLSTM_Max_vote"
 # Number of input units (window samples)
-N_UNITS = 64
+N_UNITS = 32
 # Number of units in the hidden (recurrent) layer
 N_HIDDEN = 200
 # Number of training sequences in each batch
@@ -100,33 +100,24 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=N_FE
 
     # Reshape layer for convolution
     l_dim = lasagne.layers.DimshuffleLayer(l_in, (0, 2, 1))
-
-    model = lasagne.layers.get_output(l_dim, sym_x)
-    out = model.eval({sym_x: x})
-    print("Input reshape shape", out.shape)
+    print("Conv input shape", lasagne.layers.get_output(l_dim, sym_x).eval({sym_x: x}).shape)
 
     # Convolution layers. Convolution, pooling and dropout
     l_conv = lasagne.layers.Conv1DLayer(l_dim,  num_filters=10, filter_size=3, stride=1, pad=1, nonlinearity=None)
     l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
 
-    l_conv2 = lasagne.layers.Conv1DLayer(l_dim,  num_filters=10, filter_size=3, stride=1, pad=1)
-    l_pool2 = lasagne.layers.MaxPool1DLayer(l_conv2, pool_size=2)
+    # l_conv2 = lasagne.layers.Conv1DLayer(l_dim,  num_filters=10, filter_size=3, stride=1, pad=1)
+    # l_pool2 = lasagne.layers.MaxPool1DLayer(l_conv2, pool_size=2)
+    #
+    # l_concat = lasagne.layers.ConcatLayer([l_pool, l_pool2], axis=1)
 
-    l_concat = lasagne.layers.ConcatLayer([l_pool, l_pool2], axis=1)
-
-    l_conv3 = lasagne.layers.Conv1DLayer(l_concat,  num_filters=10, filter_size=3, stride=1, pad=1)
-
-    model = lasagne.layers.get_output(l_conv3, sym_x)
-    out = model.eval({sym_x: x})
-    print("Conv shape", out.shape)
+    # l_conv3 = lasagne.layers.Conv1DLayer(l_concat,  num_filters=10, filter_size=3, stride=1, pad=1, nonlinearity=None)
+    print("Conv output shape", lasagne.layers.get_output(l_pool, sym_x).eval({sym_x: x}).shape)
 
     # Reshape layer back to normal
-    l_dim = lasagne.layers.DimshuffleLayer(l_conv3, (0, 2, 1))
+    l_dim = lasagne.layers.DimshuffleLayer(l_pool, (0, 2, 1))
     # l_reshp = lasagne.layers.ReshapeLayer(l_dim, (batch_size, 64, -1))
-
-    model = lasagne.layers.get_output(l_dim, sym_x)
-    out = model.eval({sym_x: x})
-    print("BLSTM input shape", out.shape)
+    print("BLSTM input shape", lasagne.layers.get_output(l_dim, sym_x).eval({sym_x: x}).shape)
 
     # BLSTM layers
     l_forward = lasagne.layers.LSTMLayer(
