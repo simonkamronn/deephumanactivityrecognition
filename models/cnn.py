@@ -1,6 +1,7 @@
 __author__ = 'Simon'
 
 import theano
+theano.config.floatX = 'float32'
 import theano.tensor as T
 import lasagne
 from base import Model
@@ -8,7 +9,7 @@ from deepmodels.nonlinearities import rectify, softmax
 
 
 class CNN(Model):
-    def __init__(self, n_in, n_filters, filter_sizes, n_out, pool_size=2, n_hidden=512, downsample=1, ccf=False,
+    def __init__(self, n_in, n_filters, filter_sizes, n_out, pool_sizes=None, n_hidden=512, downsample=1, ccf=False,
                  sum_channels=False, trans_func=rectify, out_func=softmax, batch_size=100, dropout_probability=0.0):
         super(CNN, self).__init__(n_in, n_hidden, n_out, batch_size, trans_func)
         self.outf = out_func
@@ -39,7 +40,7 @@ class CNN(Model):
 
         if sum_channels:
             l_prev = lasagne.layers.DimshuffleLayer(l_prev, (0, 2, 1))
-            for n_filter, filter_size in zip(n_filters, filter_sizes):
+            for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
                 print("Adding conv layer: %d x %d" % (n_filter, filter_size))
                 l_tmp = lasagne.layers.Conv1DLayer(l_prev, num_filters=n_filter, filter_size=filter_size, nonlinearity=self.transf)
                 if pool_size > 1:
@@ -48,7 +49,7 @@ class CNN(Model):
                 l_prev = l_tmp
         else:
             l_prev = lasagne.layers.ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
-            for n_filter, filter_size in zip(n_filters, filter_sizes):
+            for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
                 print("Adding 2D conv layer: %d x %d" % (n_filter, filter_size))
                 l_tmp = lasagne.layers.Conv2DLayer(l_prev, num_filters=n_filter, filter_size=(filter_size, 1), nonlinearity=self.transf)
                 if pool_size > 1:
@@ -56,6 +57,8 @@ class CNN(Model):
                     l_tmp = lasagne.layers.MaxPool2DLayer(l_tmp, pool_size=(pool_size, 1))
                 l_prev = l_tmp
 
+        print("Adding dense layer with %d units" % n_hidden)
+        l_prev = lasagne.layers.DenseLayer(l_prev, num_units=n_hidden, nonlinearity=self.transf)
         print("Adding dense layer with %d units" % n_hidden)
         l_prev = lasagne.layers.DenseLayer(l_prev, num_units=n_hidden, nonlinearity=self.transf)
         if dropout:

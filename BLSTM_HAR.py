@@ -51,27 +51,21 @@ def expand_target(y, length):
 
 
 def load_data():
-    data = ld.LoadHAR(ROOT_FOLDER).uci_har_v1(add_pitch=True, add_roll=True)
+    (x_train, y_train), (x_test, y_test), (x_valid, y_valid) = ld.LoadHAR(ROOT_FOLDER).uci_har_v1(add_pitch=True, add_roll=True)
 
     return dict(
-        output_dim=int(data['y_test'].shape[-1]),
-        X_train=theano.shared(data['x_train'].astype(theano.config.floatX)),
-        y_train=theano.shared(
-            expand_target(data['y_train'], 0).astype(theano.config.floatX)
-        ),
-        X_valid=theano.shared(data['x_test'].astype(theano.config.floatX)),
-        y_valid=theano.shared(
-            expand_target(data['y_test'], 0).astype(theano.config.floatX)
-        ),
-        X_test=theano.shared(data['x_test'].astype(theano.config.floatX)),
-        y_test=theano.shared(
-            expand_target(data['y_test'], 0).astype(theano.config.floatX)
-        ),
-        num_examples_train=data['x_train'].shape[0],
-        num_examples_valid=data['x_test'].shape[0],
-        num_examples_test=data['x_test'].shape[0],
-        seq_len=int(data['x_train'].shape[1]),
-        n_fea=int(data['x_train'].shape[2])
+        output_dim=int(y_test.shape[-1].eval()),
+        X_train=x_train,
+        y_train=y_train,
+        X_test=x_test,
+        y_test=y_test,
+        X_valid=x_valid,
+        y_valid=y_valid,
+        num_examples_train=x_train.shape[0].eval(),
+        num_examples_valid=x_test.shape[0].eval(),
+        num_examples_test=x_test.shape[0].eval(),
+        seq_len=int(x_train.shape[1].eval()),
+        n_fea=int(x_train.shape[2].eval())
         )
 
 
