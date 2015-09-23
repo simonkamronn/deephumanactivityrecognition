@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import theano.sandbox.cuda
-theano.sandbox.cuda.use('gpu0')
+theano.sandbox.cuda.use('gpu1')
 
 import os
 import theano
@@ -21,7 +21,7 @@ NAME ="CNN_BLSTM_Max_vote"
 # Number of input units (window samples)
 N_UNITS = 32
 # Number of units in the hidden (recurrent) layer
-N_HIDDEN = 200
+N_HIDDEN = 100
 # Number of training sequences in each batch
 BATCH_SIZE = 100
 # Number of features
@@ -47,33 +47,29 @@ if 'nt' in os.name:
 else:
     ROOT_FOLDER = '/home/sdka/data/activity'
 
+
 # Expand the target to all time steps
 def expand_target(y, length):
     return np.rollaxis(np.tile(y, (length, 1, 1)), 1,)
 
 
 def load_data():
-    data = ld.LoadHAR(ROOT_FOLDER).uci_har_v1(add_pitch=True, add_roll=True)
+    (x_train, y_train), (x_test, y_test), (x_valid, y_valid), (sequence_length, n_features, n_classes) \
+        = ld.LoadHAR(ROOT_FOLDER).uci_har_v1(add_pitch=True, add_roll=True, expand=True)
 
     return dict(
-        output_dim=int(data['y_test'].shape[-1]),
-        X_train=theano.shared(data['x_train'].astype(theano.config.floatX)),
-        y_train=theano.shared(
-            expand_target(data['y_train'], N_UNITS).astype(theano.config.floatX)
-        ),
-        X_valid=theano.shared(data['x_test'].astype(theano.config.floatX)),
-        y_valid=theano.shared(
-            expand_target(data['y_test'], N_UNITS).astype(theano.config.floatX)
-        ),
-        X_test=theano.shared(data['x_test'].astype(theano.config.floatX)),
-        y_test=theano.shared(
-            expand_target(data['y_test'], N_UNITS).astype(theano.config.floatX)
-        ),
-        num_examples_train=data['x_train'].shape[0],
-        num_examples_valid=data['x_test'].shape[0],
-        num_examples_test=data['x_test'].shape[0],
-        seq_len=int(data['x_train'].shape[1]),
-        n_fea=int(data['x_train'].shape[2])
+        output_dim=n_classes,
+        X_train=x_train,
+        y_train=y_train,
+        X_test=x_test,
+        y_test=y_test,
+        X_valid=x_valid,
+        y_valid=y_valid,
+        num_examples_train=x_train.shape[0].eval(),
+        num_examples_valid=x_test.shape[0].eval(),
+        num_examples_test=x_test.shape[0].eval(),
+        seq_len=sequence_length,
+        n_fea=n_features
         )
 
 
@@ -93,10 +89,7 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=N_FE
     print("Input shape", out.shape)
 
     # Input dropout for regularization
-    l_in = lasagne.layers.dropout(l_in, p=INPUT_DROPOUT)
-
-    # Reshape to a single sample dimension
-    # l_reshp = lasagne.layers.ReshapeLayer(l_in, (batch_size, seq_len*n_features, 1))
+    # l_in = lasagne.layers.dropout(l_in, p=INPUT_DROPOUT)
 
     # Reshape layer for convolution
     l_dim = lasagne.layers.DimshuffleLayer(l_in, (0, 2, 1))
@@ -104,7 +97,7 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=N_FE
 
     # Convolution layers. Convolution, pooling and dropout
     l_conv = lasagne.layers.Conv1DLayer(l_dim,  num_filters=10, filter_size=3, stride=1, pad=1, nonlinearity=None)
-    l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
+    # l_pool = lasagne.layers.MaxPool1DLayer(l_conv, pool_size=2)
 
     # l_conv2 = lasagne.layers.Conv1DLayer(l_dim,  num_filters=10, filter_size=3, stride=1, pad=1)
     # l_pool2 = lasagne.layers.MaxPool1DLayer(l_conv2, pool_size=2)
@@ -112,10 +105,10 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=N_FE
     # l_concat = lasagne.layers.ConcatLayer([l_pool, l_pool2], axis=1)
 
     # l_conv3 = lasagne.layers.Conv1DLayer(l_concat,  num_filters=10, filter_size=3, stride=1, pad=1, nonlinearity=None)
-    print("Conv output shape", lasagne.layers.get_output(l_pool, sym_x).eval({sym_x: x}).shape)
+    print("Conv output shape", lasagne.layers.get_output(l_conv, sym_x).eval({sym_x: x}).shape)
 
     # Reshape layer back to normal
-    l_dim = lasagne.layers.DimshuffleLayer(l_pool, (0, 2, 1))
+    l_dim = lasagne.layers.DimshuffleLayer(l_conv, (0, 2, 1))
     # l_reshp = lasagne.layers.ReshapeLayer(l_dim, (batch_size, 64, -1))
     print("BLSTM input shape", lasagne.layers.get_output(l_dim, sym_x).eval({sym_x: x}).shape)
 
@@ -252,6 +245,7 @@ def max_vote(data, output_dim, batch_size=BATCH_SIZE):
     for i in range(batch_size):
         votes.append(T.argmax(T.extra_ops.bincount(data[i], minlength=output_dim)))
     return votes
+
 
 def create_iter_functions(dataset, output_layer,
                           batch_size=BATCH_SIZE,

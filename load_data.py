@@ -5,6 +5,7 @@ Each method returns a data dict with train and test data, i.e. 'x_test', 'y_test
 with the shape of n_batch x samples x features
 '''
 import theano
+theano.config.floatX = 'float32'
 import os
 import pandas as pd
 import glob as glob
@@ -12,7 +13,7 @@ import numpy as np
 from scipy.io import loadmat
 from sklearn.cross_validation import StratifiedShuffleSplit
 import itertools
-from har_utils import roll, pitch
+from har_utils import roll, pitch, expand_target
 
 # Path to HAR data
 if 'nt' in os.name:
@@ -26,7 +27,15 @@ class LoadHAR(object):
         if root_folder is None:
             raise RuntimeError('Invalid folder')
 
-    def uci_har_v1(self, add_pitch=False, add_roll=False):
+    def uci_hapt(self, add_pitc=False, add_roll=False):
+        subfolder = '/UCI/HAPT Data Set/RawData/'
+        files = glob.glob(self.root_folder + subfolder + 'acc_*')
+
+        data = dict()
+        for file in files:
+            pass
+
+    def uci_har_v1(self, add_pitch=False, add_roll=False, expand=False):
         """
         Data from Ortiz
         :return:
@@ -35,8 +44,8 @@ class LoadHAR(object):
         test_folder = self.root_folder + sub_folder + 'test/'
         train_folder = self.root_folder + sub_folder + 'train/'
 
-        test_files = glob.glob(test_folder + 'Inertial Signals/total_acc_*')
-        train_files = glob.glob(train_folder + 'Inertial Signals/total_acc_*')
+        test_files = sorted(glob.glob(test_folder + 'Inertial Signals/total_acc_*'))
+        train_files = sorted(glob.glob(train_folder + 'Inertial Signals/total_acc_*'))
 
         data = dict()
         data['x_test'] = pd.read_csv(test_files[0], sep=r'\s+').values
@@ -49,6 +58,10 @@ class LoadHAR(object):
 
         data['y_train'] = one_hot(pd.read_csv(train_folder + 'y_train.txt', squeeze=True).values - 1)
         data['y_test'] = one_hot(pd.read_csv(test_folder + 'y_test.txt', squeeze=True).values - 1)
+
+        if expand:
+            data['y_train'] = expand_target(data['y_train'], data['x_test'].shape[1])
+            data['y_test'] = expand_target(data['y_test'], data['x_test'].shape[1])
 
         # Load precomputed features
         features = pd.read_csv(self.root_folder + sub_folder + "/features.txt", header=None, sep=";", names=['features'], squeeze=True).str.strip()
@@ -85,16 +98,15 @@ class LoadHAR(object):
                 for i in range(n_win):
                     rolls.append(roll(data[key][i,:,:3]))
                 data[key] = np.concatenate((data[key], rolls), axis=2)
-
-        return shared_dataset((data['x_train'], data['y_train'])), \
-               shared_dataset((data['x_test'], data['y_test'])), \
-               shared_dataset((data['x_test'], data['y_test']))
+        # np.savez('data/uci_har_v1_theia.npz', x_train=data['x_train'], y_train=data['y_train'], x_test=data['x_test'], y_test=data['y_test'])
+        return return_shared_tuple(data)
 
     def skoda(self):
         """
         dataset_xx[axis][class][instance] is a vector with calibrated acceleration
         data; length of vector is gesture length dependent and varies with
         class number and instance number.
+        output: 64x13
         """
         sub_folder = 'ETH/SkodaMiniCP/'
         data = loadmat(self.root_folder + sub_folder + 'right_classall_clean', squeeze_me=True)['right_classall_clean']
@@ -115,9 +127,10 @@ class LoadHAR(object):
             tmp = np.vstack((tmp, pd.read_csv(self.root_folder + sub_folder + 'mHealth_subject%d.log' % idx,
                                          sep='\t',
                                          usecols=[0, 1, 2, 23]).values))
+        ratio = 1
         for idx in range(1,13):
             tmp2 = tmp[tmp[:, -1]==idx]
-            tmp2 = downsample(tmp2, ratio=2)
+            tmp2 = downsample(tmp2, ratio=ratio)
             tmp2 = window_segment(tmp2, n_samples=64)
 
             if idx is 1:
@@ -133,7 +146,7 @@ class LoadHAR(object):
             data['x_train'], data['x_test'] = tmp_seg[train_index, :, :3], tmp_seg[test_index, :, :3]
             data['y_train'], data['y_test'] = one_hot(tmp_seg[train_index, 0, -1].astype('int')), \
                                               one_hot(tmp_seg[test_index, 0, -1].astype('int'))
-        return data
+        return return_shared_tuple(data)
 
     def idash(self):
         """
@@ -149,7 +162,7 @@ class LoadHAR(object):
         tmp_seg = np.empty((0, n_samples, len(cols)))
         target = []
         for subject in subjects:
-            files = glob.glob(self.root_folder + sub_folder + '%d/*' % subject)
+            files = sorted(glob.glob(self.root_folder + sub_folder + '%d/*' % subject))
             for idx, csv_file in enumerate(files):
                 if not "blank" in csv_file:
                     tmp = pd.read_csv(csv_file, sep=',', usecols=cols).values
@@ -166,7 +179,7 @@ class LoadHAR(object):
             data['x_train'], data['x_test'] = tmp_seg[train_index], tmp_seg[test_index]
             data['y_train'], data['y_test'] = one_hot(target[train_index].astype('int')), \
                                               one_hot(target[test_index].astype('int'))
-        return data
+        return return_shared_tuple(data)
 
     def pamap2(self):
         pass
@@ -177,7 +190,7 @@ class LoadHAR(object):
         Subjects: 33
         """
         sub_folder = 'mhealth/Mannini_Data_and_Code_PMC2015/Data/'
-        data = loadmat(glob.glob(self.root_folder + sub_folder + '*.mat')[0])
+        data = loadmat(sorted(glob.glob(self.root_folder + sub_folder + '*.mat'))[0])
         X = data['Data_m']
 
 def one_hot(labels, n_classes=None):
@@ -223,3 +236,14 @@ def shared_dataset(data_xy, borrow=True):
     shared_x = theano.shared(np.asarray(x, dtype=theano.config.floatX), borrow=borrow)
     shared_y = theano.shared(np.asarray(y, dtype=theano.config.floatX), borrow=borrow)
     return shared_x, shared_y
+
+def return_shared_tuple(data):
+    n_train, sequence_length, n_features = data['x_train'].shape
+    n_classes = data['y_train'].shape[-1]
+    print('Sequence: %d' % sequence_length)
+    print('Features: %d' % n_features)
+    print('Classes: %d' % n_classes)
+    return shared_dataset((data['x_train'].astype(theano.config.floatX), data['y_train'].astype(theano.config.floatX))), \
+           shared_dataset((data['x_test'].astype(theano.config.floatX), data['y_test'].astype(theano.config.floatX))), \
+           shared_dataset((data['x_test'].astype(theano.config.floatX), data['y_test'].astype(theano.config.floatX))), \
+           (int(sequence_length), int(n_features), int(n_classes))

@@ -6,10 +6,10 @@ import theano.tensor as T
 import lasagne
 from base import Model
 from deepmodels.nonlinearities import rectify, softmax
-
+import numpy as np
 
 class CNN(Model):
-    def __init__(self, n_in, n_filters, filter_sizes, n_out, pool_sizes=None, n_hidden=512, downsample=1, ccf=False,
+    def __init__(self, n_in, n_filters, filter_sizes, n_out, pool_sizes=None, n_hidden=(512), downsample=1, ccf=False,
                  sum_channels=False, trans_func=rectify, out_func=softmax, batch_size=100, dropout_probability=0.0):
         super(CNN, self).__init__(n_in, n_hidden, n_out, batch_size, trans_func)
         self.outf = out_func
@@ -25,6 +25,10 @@ class CNN(Model):
         self.l_in = lasagne.layers.InputLayer(shape=(batch_size, sequence_length, n_features))
         l_prev = self.l_in
 
+        # Data for getting output shape
+        x = np.random.random((batch_size, sequence_length, n_features)).astype(theano.config.floatX)
+        sym_x = T.tensor3('x')
+
         # Downsample input
         if downsample > 1:
             print("Downsampling with a factor of %d" % downsample)
@@ -34,15 +38,22 @@ class CNN(Model):
         if ccf:
             print("Adding cross-channel feature layer")
             l_prev = lasagne.layers.ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
-            l_prev = lasagne.layers.Conv2DLayer(l_prev, num_filters=n_features, filter_size=(1, n_features), nonlinearity=None)
+            l_prev = lasagne.layers.Conv2DLayer(l_prev,
+                                                num_filters=n_features,
+                                                filter_size=(1, n_features),
+                                                nonlinearity=None)
             l_prev = lasagne.layers.ReshapeLayer(l_prev, (batch_size, n_features, sequence_length))
             l_prev = lasagne.layers.DimshuffleLayer(l_prev, (0, 2, 1))
 
         if sum_channels:
             l_prev = lasagne.layers.DimshuffleLayer(l_prev, (0, 2, 1))
             for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
-                print("Adding conv layer: %d x %d" % (n_filter, filter_size))
-                l_tmp = lasagne.layers.Conv1DLayer(l_prev, num_filters=n_filter, filter_size=filter_size, nonlinearity=self.transf)
+                print("Adding 1D conv layer: %d x %d" % (n_filter, filter_size))
+                l_tmp = lasagne.layers.Conv1DLayer(l_prev,
+                                                   num_filters=n_filter,
+                                                   filter_size=filter_size,
+                                                   nonlinearity=self.transf,
+                                                   b=lasagne.init.Constant(1.))
                 if pool_size > 1:
                     print("Adding max pooling layer: %d" % pool_size)
                     l_tmp = lasagne.layers.MaxPool1DLayer(l_tmp, pool_size=pool_size)
@@ -51,17 +62,21 @@ class CNN(Model):
             l_prev = lasagne.layers.ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
             for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
                 print("Adding 2D conv layer: %d x %d" % (n_filter, filter_size))
-                l_tmp = lasagne.layers.Conv2DLayer(l_prev, num_filters=n_filter, filter_size=(filter_size, 1), nonlinearity=self.transf)
+                l_tmp = lasagne.layers.Conv2DLayer(l_prev,
+                                                   num_filters=n_filter,
+                                                   filter_size=(filter_size, 1),
+                                                   nonlinearity=self.transf)
                 if pool_size > 1:
                     print("Adding max pooling layer: %d" % pool_size)
                     l_tmp = lasagne.layers.MaxPool2DLayer(l_tmp, pool_size=(pool_size, 1))
                 l_prev = l_tmp
 
-        print("Adding dense layer with %d units" % n_hidden)
-        l_prev = lasagne.layers.DenseLayer(l_prev, num_units=n_hidden, nonlinearity=self.transf)
-        print("Adding dense layer with %d units" % n_hidden)
-        l_prev = lasagne.layers.DenseLayer(l_prev, num_units=n_hidden, nonlinearity=self.transf)
+        for n_hid in n_hidden:
+            print("Adding dense layer with %d units" % n_hid)
+            print("Dense input shape", lasagne.layers.get_output(l_prev, sym_x).eval({sym_x: x}).shape)
+            l_prev = lasagne.layers.DenseLayer(l_prev, num_units=n_hid, nonlinearity=self.transf)
         if dropout:
+            print("Adding output dropout with probability %.2f" % dropout_probability)
             l_prev = lasagne.layers.DropoutLayer(l_prev, p=dropout_probability)
 
         self.model = lasagne.layers.DenseLayer(l_prev, num_units=n_out, nonlinearity=out_func)
@@ -74,7 +89,7 @@ class CNN(Model):
             T.clip(
                 lasagne.layers.get_output(self.model, self.x),
                 epsilon,
-                1-epsilon),
+                1),
             self.t
         ).mean()
 
@@ -82,7 +97,7 @@ class CNN(Model):
             T.clip(
                 lasagne.layers.get_output(self.model, self.x, deterministic=True),
                 epsilon,
-                1-epsilon),
+                1),
             self.t
         ).mean()
 

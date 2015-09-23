@@ -2,6 +2,7 @@ __author__ = 'Simon'
 import numpy as np
 from matplotlib.mlab import specgram
 
+
 def roll(data):
     x, y, z = np.transpose(data)
     return np.arctan(y/np.sqrt(x**2 + z**2)).reshape((len(x), 1))
@@ -45,6 +46,7 @@ def spectrogram_3d(data):
     print("Spectrogram conversion output shape", data.shape)
     return data
 
+
 def spectrogram_2d(data):
     """
     Convert array of epoched accelerometer time series to spectrograms
@@ -68,6 +70,7 @@ def spectrogram_2d(data):
     data = data - np.mean(data)
     print("Spectrogram conversion output shape", data.shape)
     return data
+
 
 # Expand the target to all time steps
 def expand_target(y, length):

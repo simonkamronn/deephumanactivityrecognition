@@ -1,7 +1,7 @@
 from __future__ import print_function
 
 import theano.sandbox.cuda
-theano.sandbox.cuda.use('gpu3')
+theano.sandbox.cuda.use('gpu2')
 
 import os
 import theano
@@ -10,6 +10,7 @@ import lasagne
 import load_data as ld
 import numpy as np
 import lasagne.updates
+from lasagne.objectives import categorical_crossentropy
 import itertools
 import time
 import pandas as pd
@@ -19,17 +20,17 @@ matplotlib.use("Agg")
 
 NAME = "BLSTM"
 # Number of units in the hidden (recurrent) layer
-N_HIDDEN = 100
+N_HIDDEN = 200
 # Number of training sequences in each batch
 BATCH_SIZE = 100
 # Optimization learning rate
 LEARNING_RATE = .001
 # All gradients above this will be clipped
-GRAD_CLIP = 100
+GRAD_CLIP = 5
 # How often should we check the output?
 EPOCH_SIZE = 100
 # Number of epochs to train the net
-NUM_EPOCHS = 100
+NUM_EPOCHS = 500
 # Momentum
 MOMENTUM = 0.9
 DROPOUT = 0.5
@@ -51,10 +52,11 @@ def expand_target(y, length):
 
 
 def load_data():
-    (x_train, y_train), (x_test, y_test), (x_valid, y_valid) = ld.LoadHAR(ROOT_FOLDER).uci_har_v1(add_pitch=True, add_roll=True)
+    (x_train, y_train), (x_test, y_test), (x_valid, y_valid), (sequence_length, n_features, n_classes) \
+        = ld.LoadHAR(ROOT_FOLDER).uci_har_v1(add_pitch=False, add_roll=False)
 
     return dict(
-        output_dim=int(y_test.shape[-1].eval()),
+        output_dim=n_classes,
         X_train=x_train,
         y_train=y_train,
         X_test=x_test,
@@ -64,8 +66,8 @@ def load_data():
         num_examples_train=x_train.shape[0].eval(),
         num_examples_valid=x_test.shape[0].eval(),
         num_examples_test=x_test.shape[0].eval(),
-        seq_len=int(x_train.shape[1].eval()),
-        n_fea=int(x_train.shape[2].eval())
+        seq_len=sequence_length,
+        n_fea=n_features
         )
 
 
@@ -79,10 +81,10 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=None
     )
 
     # Adding noise to weights can help training
-    # l = layers.GaussianNoiseLayer(l_in)
+    # l_in = lasagne.layers.GaussianNoiseLayer(l_in)
 
     # Input dropout for regularization
-    # l = lasagne.layers.dropout(l_in, p=INPUT_DROPOUT)
+    # l_in = lasagne.layers.dropout(l_in, p=INPUT_DROPOUT)
 
     # I'm using a bidirectional network, which means we will combine two
     # RecurrentLayers, one with the backwards=True keyword argument.
@@ -113,70 +115,38 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=None
         backwards=True
     )
 
-    # New BLSTM layer
-    l_cat = lasagne.layers.ConcatLayer(
-        [l_forward, l_backward],
-        axis=2
-    )
-
-    l_forward = lasagne.layers.LSTMLayer(
-        l_cat,
-        num_units=N_HIDDEN/2,
-        ingate=lasagne.layers.Gate(
-            W_in=lasagne.init.HeUniform(),
-            W_hid=lasagne.init.HeUniform()
-        ),
-        grad_clipping=GRAD_CLIP,
-        forgetgate=lasagne.layers.Gate(
-            b=lasagne.init.Constant(CONST_FORGET_B)
-        )
-    )
-
-    l_backward = lasagne.layers.LSTMLayer(
-        l_cat,
-        num_units=N_HIDDEN/2,
-        ingate=lasagne.layers.Gate(
-            W_in=lasagne.init.HeUniform(),
-            W_hid=lasagne.init.HeUniform()
-        ),
-        grad_clipping=GRAD_CLIP,
-        forgetgate=lasagne.layers.Gate(
-            b=lasagne.init.Constant(CONST_FORGET_B)
-        ),
-        backwards=True
-    )
-
-    # New BLSTM layer
-    l_cat = lasagne.layers.ConcatLayer(
-        [l_forward, l_backward],
-        axis=2
-    )
-
-    l_forward = lasagne.layers.LSTMLayer(
-        l_cat,
-        num_units=N_HIDDEN/2,
-        ingate=lasagne.layers.Gate(
-            W_in=lasagne.init.HeUniform(),
-            W_hid=lasagne.init.HeUniform()
-        ),
-        grad_clipping=GRAD_CLIP,
-        forgetgate=lasagne.layers.Gate(
-            b=lasagne.init.Constant(CONST_FORGET_B)
-        )
-    )
-    l_backward = lasagne.layers.LSTMLayer(
-        l_cat,
-        num_units=N_HIDDEN/2,
-        ingate=lasagne.layers.Gate(
-            W_in=lasagne.init.HeUniform(),
-            W_hid=lasagne.init.HeUniform()
-        ),
-        grad_clipping=GRAD_CLIP,
-        forgetgate=lasagne.layers.Gate(
-            b=lasagne.init.Constant(CONST_FORGET_B)
-        ),
-        backwards=True
-    )
+    # # New BLSTM layer
+    # l_cat = lasagne.layers.ConcatLayer(
+    #     [l_forward, l_backward],
+    #     axis=2
+    # )
+    #
+    # l_forward = lasagne.layers.LSTMLayer(
+    #     l_cat,
+    #     num_units=N_HIDDEN/2,
+    #     ingate=lasagne.layers.Gate(
+    #         W_in=lasagne.init.HeUniform(),
+    #         W_hid=lasagne.init.HeUniform()
+    #     ),
+    #     grad_clipping=GRAD_CLIP,
+    #     forgetgate=lasagne.layers.Gate(
+    #         b=lasagne.init.Constant(CONST_FORGET_B)
+    #     )
+    # )
+    #
+    # l_backward = lasagne.layers.LSTMLayer(
+    #     l_cat,
+    #     num_units=N_HIDDEN/2,
+    #     ingate=lasagne.layers.Gate(
+    #         W_in=lasagne.init.HeUniform(),
+    #         W_hid=lasagne.init.HeUniform()
+    #     ),
+    #     grad_clipping=GRAD_CLIP,
+    #     forgetgate=lasagne.layers.Gate(
+    #         b=lasagne.init.Constant(CONST_FORGET_B)
+    #     ),
+    #     backwards=True
+    # )
 
     # Slicing out the last units for classification
     l_forward_slice = lasagne.layers.SliceLayer(l_forward, -1, 1)
@@ -210,20 +180,26 @@ def create_iter_functions(dataset, output_layer,
     batch_index = T.iscalar('batch_index')
     X_batch = T.tensor3('input')
     y_batch = T.matrix('target_output')
-    batch_slice = slice(batch_index * batch_size,
-                        (batch_index + 1) * batch_size)
+    batch_slice = slice(batch_index * batch_size, (batch_index + 1) * batch_size)
 
-    loss_train = cross_ent_cost(
-        lasagne.layers.get_output(output_layer, X_batch, deterministic=False),
+    epsilon = 1e-8
+    loss_train = categorical_crossentropy(
+        T.clip(
+            lasagne.layers.get_output(output_layer, X_batch, deterministic=False),
+            epsilon,
+            1),
         y_batch
-    )
+    ).mean()
+
+    loss_eval = categorical_crossentropy(
+        T.clip(
+            lasagne.layers.get_output(output_layer, X_batch, deterministic=True),
+            epsilon,
+            1),
+        y_batch
+    ).mean()
 
     test_prediction = lasagne.layers.get_output(output_layer, X_batch, deterministic=True)
-    loss_eval = cross_ent_cost(
-        test_prediction,
-        y_batch
-    )
-
     accuracy = T.mean(
         T.eq(T.argmax(test_prediction, axis=1), T.argmax(y_batch, axis=1)),
         dtype=theano.config.floatX
@@ -233,8 +209,8 @@ def create_iter_functions(dataset, output_layer,
     updates = lasagne.updates.rmsprop(
         loss_train,
         all_params,
-        learning_rate=0.002,
-        rho=0.95
+        learning_rate=0.001,
+        rho=0.9
     )
 
     iter_train = theano.function(
