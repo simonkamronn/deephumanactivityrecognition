@@ -14,10 +14,10 @@ import load_data as ld
 def run_cnn():
     train_set, test_set, valid_set, (sequence_length, n_features, n_classes) = ld.LoadHAR().uci_har_v1(True, True)
     model = CNN(n_in=(sequence_length, n_features),
-                n_filters=[64, 64, 64],
-                filter_sizes=[3, 3, 3],
-                pool_sizes=[2, 2, 2],
-                n_hidden=[512, 512],
+                n_filters=[64, 64, 128, 128, 256, 256],
+                filter_sizes=[3, 3, 3, 3, 3, 3],
+                pool_sizes=[0, 2, 0, 2, 0, 2],
+                n_hidden=[256, 256],
                 n_out=n_classes,
                 downsample=2,
                 sum_channels=False,
@@ -32,7 +32,7 @@ def run_cnn():
                        loss=categorical_crossentropy,
                        update=adam,
                        update_args=(0.001,),
-                       eval_freq=10,
+                       eval_freq=100,
                        pickle=True,
                        custom_eval_func=None)
     train.train_model(1000)

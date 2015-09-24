@@ -11,6 +11,7 @@ import load_data as ld
 import numpy as np
 import lasagne.updates
 from lasagne.objectives import categorical_crossentropy
+from lasagne.layers import LSTMLayer, Gate, InputLayer, DenseLayer, ConcatLayer, SliceLayer, get_output
 import itertools
 import time
 import pandas as pd
@@ -20,19 +21,17 @@ matplotlib.use("Agg")
 
 NAME = "BLSTM"
 # Number of units in the hidden (recurrent) layer
-N_HIDDEN = 200
+N_HIDDEN = 40
 # Number of training sequences in each batch
 BATCH_SIZE = 100
 # Optimization learning rate
-LEARNING_RATE = .001
+LEARNING_RATE = .002
 # All gradients above this will be clipped
 GRAD_CLIP = 5
 # How often should we check the output?
 EPOCH_SIZE = 100
 # Number of epochs to train the net
 NUM_EPOCHS = 500
-# Momentum
-MOMENTUM = 0.9
 DROPOUT = 0.5
 INPUT_DROPOUT = 0.2
 # Forget gate bias init
@@ -53,7 +52,7 @@ def expand_target(y, length):
 
 def load_data():
     (x_train, y_train), (x_test, y_test), (x_valid, y_valid), (sequence_length, n_features, n_classes) \
-        = ld.LoadHAR(ROOT_FOLDER).uci_har_v1(add_pitch=False, add_roll=False)
+        = ld.LoadHAR(ROOT_FOLDER).uci_har_v1(True, True)
 
     return dict(
         output_dim=n_classes,
@@ -72,11 +71,15 @@ def load_data():
 
 
 def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=None):
+    # Data for getting output shape
+    x = np.random.random((batch_size, seq_len, n_features)).astype(theano.config.floatX)
+    sym_x = T.tensor3('x')
+
     print("Building network ...")
     # First, we build the network, starting with an input layer
     # Recurrent layers expect input of shape
     # (batch size, max sequence length, number of features)
-    l_in = lasagne.layers.InputLayer(
+    l_in = InputLayer(
         shape=(batch_size, seq_len, n_features)
     )
 
@@ -89,76 +92,57 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=None
     # I'm using a bidirectional network, which means we will combine two
     # RecurrentLayers, one with the backwards=True keyword argument.
     # Setting a value for grad_clipping will clip the gradients in the layer
-    l_forward = lasagne.layers.LSTMLayer(
-        l_in,
-        num_units=N_HIDDEN/2,
-        ingate=lasagne.layers.Gate(
-            W_in=lasagne.init.HeUniform(),
-            W_hid=lasagne.init.HeUniform()
-        ),
-        grad_clipping=GRAD_CLIP,
-        forgetgate=lasagne.layers.Gate(
-            b=lasagne.init.Constant(CONST_FORGET_B)
+    l_prev = l_in
+    num_layers = 3
+    for _ in range(num_layers):
+        l_forward = LSTMLayer(
+            l_prev,
+            num_units=N_HIDDEN/2,
+            ingate=Gate(
+                W_in=lasagne.init.HeUniform(),
+                W_hid=lasagne.init.HeUniform()
+            ),
+            grad_clipping=GRAD_CLIP,
+            forgetgate=Gate(
+                b=lasagne.init.Constant(CONST_FORGET_B)
+            ),
+            nonlinearity=lasagne.nonlinearities.tanh
         )
-    )
-    l_backward = lasagne.layers.LSTMLayer(
-        l_in,
-        num_units=N_HIDDEN/2,
-        ingate=lasagne.layers.Gate(
-            W_in=lasagne.init.HeUniform(),
-            W_hid=lasagne.init.HeUniform()
-        ),
-        grad_clipping=GRAD_CLIP,
-        forgetgate=lasagne.layers.Gate(
-            b=lasagne.init.Constant(CONST_FORGET_B)
-        ),
-        backwards=True
-    )
+        l_backward = LSTMLayer(
+            l_prev,
+            num_units=N_HIDDEN/2,
+            ingate=Gate(
+                W_in=lasagne.init.HeUniform(),
+                W_hid=lasagne.init.HeUniform()
+            ),
+            grad_clipping=GRAD_CLIP,
+            forgetgate=Gate(
+                b=lasagne.init.Constant(CONST_FORGET_B)
+            ),
+            nonlinearity=lasagne.nonlinearities.tanh,
+            backwards=True
+        )
+        print("LSTM forward shape", get_output(l_forward, sym_x).eval({sym_x: x}).shape)
 
-    # # New BLSTM layer
-    # l_cat = lasagne.layers.ConcatLayer(
-    #     [l_forward, l_backward],
-    #     axis=2
-    # )
-    #
-    # l_forward = lasagne.layers.LSTMLayer(
-    #     l_cat,
-    #     num_units=N_HIDDEN/2,
-    #     ingate=lasagne.layers.Gate(
-    #         W_in=lasagne.init.HeUniform(),
-    #         W_hid=lasagne.init.HeUniform()
-    #     ),
-    #     grad_clipping=GRAD_CLIP,
-    #     forgetgate=lasagne.layers.Gate(
-    #         b=lasagne.init.Constant(CONST_FORGET_B)
-    #     )
-    # )
-    #
-    # l_backward = lasagne.layers.LSTMLayer(
-    #     l_cat,
-    #     num_units=N_HIDDEN/2,
-    #     ingate=lasagne.layers.Gate(
-    #         W_in=lasagne.init.HeUniform(),
-    #         W_hid=lasagne.init.HeUniform()
-    #     ),
-    #     grad_clipping=GRAD_CLIP,
-    #     forgetgate=lasagne.layers.Gate(
-    #         b=lasagne.init.Constant(CONST_FORGET_B)
-    #     ),
-    #     backwards=True
-    # )
+        l_prev = ConcatLayer(
+            [l_forward, l_backward],
+            axis=2
+        )
+        print("LSTM concat shape", get_output(l_prev, sym_x).eval({sym_x: x}).shape)
 
     # Slicing out the last units for classification
-    l_forward_slice = lasagne.layers.SliceLayer(l_forward, -1, 1)
-    l_backward_slice = lasagne.layers.SliceLayer(l_backward, 0, 1)
+    l_forward_slice = SliceLayer(l_forward, -1, 1)
+    l_backward_slice = SliceLayer(l_backward, 0, 1)
 
-    l_cat2 = lasagne.layers.ConcatLayer(
+    print("LSTM forward slice shape", get_output(l_forward_slice, sym_x).eval({sym_x: x}).shape)
+    l_cat2 = ConcatLayer(
         [l_forward_slice, l_backward_slice],
         axis=1
     )
 
     # Our output layer is a simple dense connection, with n_classes output unit
-    l_out = lasagne.layers.DenseLayer(
+    print("Dense input shape", get_output(l_cat2, sym_x).eval({sym_x: x}).shape)
+    l_out = DenseLayer(
         l_cat2,
         num_units=output_dim,
         nonlinearity=lasagne.nonlinearities.softmax
@@ -172,8 +156,7 @@ def cross_ent_cost(predicted_values, target_values):
 
 def create_iter_functions(dataset, output_layer,
                           batch_size=BATCH_SIZE,
-                          learning_rate=LEARNING_RATE,
-                          momentum=MOMENTUM):
+                          learning_rate=LEARNING_RATE):
     """
     Create functions for training, validation and testing to iterate one epoch.
     """
@@ -182,21 +165,21 @@ def create_iter_functions(dataset, output_layer,
     y_batch = T.matrix('target_output')
     batch_slice = slice(batch_index * batch_size, (batch_index + 1) * batch_size)
 
-    epsilon = 1e-8
+    epsilon = 1e-6
     loss_train = categorical_crossentropy(
-        T.clip(
+        predictions=T.clip(
             lasagne.layers.get_output(output_layer, X_batch, deterministic=False),
             epsilon,
             1),
-        y_batch
+        targets=y_batch
     ).mean()
 
     loss_eval = categorical_crossentropy(
-        T.clip(
+        predictions=T.clip(
             lasagne.layers.get_output(output_layer, X_batch, deterministic=True),
             epsilon,
             1),
-        y_batch
+        targets=y_batch
     ).mean()
 
     test_prediction = lasagne.layers.get_output(output_layer, X_batch, deterministic=True)
@@ -209,8 +192,8 @@ def create_iter_functions(dataset, output_layer,
     updates = lasagne.updates.rmsprop(
         loss_train,
         all_params,
-        learning_rate=0.001,
-        rho=0.9
+        learning_rate=learning_rate,
+        rho=0.95
     )
 
     iter_train = theano.function(
@@ -277,6 +260,7 @@ def train(iter_funcs, dataset, batch_size=BATCH_SIZE):
             'valid_accuracy': avg_valid_accuracy,
         }
 
+
 def main(num_epochs=NUM_EPOCHS):
     print("Loading data...")
     dataset = load_data()
@@ -306,15 +290,16 @@ def main(num_epochs=NUM_EPOCHS):
             now = time.time()
             results.append([epoch['train_loss'], epoch['valid_loss'], epoch['valid_accuracy']])
 
-            if epoch['train_loss'] is np.nan:
+            if np.isnan(epoch['train_loss']):
                 break
             if epoch['number'] >= num_epochs:
                 break
         # Save figure
-        ax = pd.DataFrame(np.asarray(results), columns=['Training loss', 'Validation loss', 'Validation accuracy'])\
-            .plot()
-        fig = ax.get_figure()
-        fig.savefig("%s-%s" % (NAME, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
+        if epoch['number'] == num_epochs:
+            ax = pd.DataFrame(np.asarray(results), columns=['Training loss', 'Validation loss', 'Validation accuracy'])\
+                .plot()
+            fig = ax.get_figure()
+            fig.savefig("%s-%s" % (NAME, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
 
     except KeyboardInterrupt:
         pass

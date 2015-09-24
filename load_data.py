@@ -47,6 +47,14 @@ class LoadHAR(object):
         test_files = sorted(glob.glob(test_folder + 'Inertial Signals/total_acc_*'))
         train_files = sorted(glob.glob(train_folder + 'Inertial Signals/total_acc_*'))
 
+        print("Test files")
+        for mfile in test_files:
+            print(mfile)
+
+        print("Train files")
+        for mfile in train_files:
+            print(mfile)
+
         data = dict()
         data['x_test'] = pd.read_csv(test_files[0], sep=r'\s+').values
         for i in range(1, len(test_files)):
@@ -231,7 +239,7 @@ def window_segment(data, n_samples = 64):
     data = np.reshape(data[:n_win*n_samples], (n_win, n_samples, n_dim))
     return data
 
-def shared_dataset(data_xy, borrow=True):
+def shared_dataset(data_xy, borrow=False):
     x, y = data_xy
     shared_x = theano.shared(np.asarray(x, dtype=theano.config.floatX), borrow=borrow)
     shared_y = theano.shared(np.asarray(y, dtype=theano.config.floatX), borrow=borrow)
