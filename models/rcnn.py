@@ -3,18 +3,27 @@ theano.config.floatX = 'float32'
 import theano.tensor as T
 import lasagne
 from base import Model
-from lasagne_extensions.nonlinearities import rectify, softmax
+from lasagne_extensions.nonlinearities import rectify, softmax, leaky_rectify
 from lasagne.layers import get_output, get_output_shape, DenseLayer, DropoutLayer, InputLayer, FeaturePoolLayer, \
-    ReshapeLayer, DimshuffleLayer, get_all_params, Conv1DLayer, MaxPool1DLayer, Conv2DLayer, Pool2DLayer
+    ReshapeLayer, DimshuffleLayer, get_all_params, ElemwiseSumLayer, Conv2DLayer, Pool2DLayer, NonlinearityLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
+# from lasagne.layers.dnn import Conv2DDNNLayer as
+# from lasagne.layers.dnn import Pool2DDNNLayer as
 from lasagne_extensions.layers.batchnormlayer import NormalizeLayer
 from lasagne_extensions.updates import adam
 
 
-class CNN(Model):
-    def __init__(self, n_in, n_filters, filter_sizes, n_out, pool_sizes=None, n_hidden=(512), downsample=1, ccf=False,
-                 sum_channels=False, batch_size=100, trans_func=rectify, out_func=softmax, dropout_probability=0.0):
-        super(CNN, self).__init__(n_in, n_hidden, n_out, trans_func)
+std = 0.02
+p1 = 0
+p2 = 0.1
+p3 = 0.1
+p4 = 0.1
+
+
+class RCNN(Model):
+    def __init__(self, n_in, n_filters, filter_sizes, n_out, pool_sizes=None, n_hidden=(), downsample=1, ccf=False,
+                 trans_func=rectify, out_func=softmax, batch_size=100, dropout_probability=0.0):
+        super(RCNN, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.outf = out_func
         self.log = ""
 
@@ -38,39 +47,25 @@ class CNN(Model):
             l_prev = Conv2DLayer(l_prev,
                                  num_filters=4*n_features,
                                  filter_size=(1, n_features),
-                                 nonlinearity=lasagne.nonlinearities.linear)
+                                 nonlinearity=lasagne.nonlinearities.tanh)
             n_features *= 4
             l_prev = ReshapeLayer(l_prev, (batch_size, n_features, sequence_length))
             l_prev = DimshuffleLayer(l_prev, (0, 2, 1))
-            l_prev = NormalizeLayer(l_prev)
 
-        if sum_channels:
-            l_prev = DimshuffleLayer(l_prev, (0, 2, 1))
-            for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
-                self.log += "\nAdding 1D conv layer: %d x %d" % (n_filter, filter_size)
-                l_tmp = Conv1DLayer(l_prev,
-                                    num_filters=n_filter,
-                                    filter_size=filter_size,
-                                    nonlinearity=self.transf,
-                                    b=lasagne.init.Constant(1.))
-                if pool_size > 1:
-                    self.log += "\nAdding max pooling layer: %d" % pool_size
-                    l_tmp = MaxPool1DLayer(l_tmp, pool_size=pool_size)
-                l_prev = l_tmp
-                print("Conv out shape", get_output_shape(l_prev))
-        else:
-            l_prev = ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
-            for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
-                self.log += "\nAdding 2D conv layer: %d x %d" % (n_filter, filter_size)
-                l_tmp = Conv2DLayer(l_prev,
-                                    num_filters=n_filter,
-                                    filter_size=(filter_size, 1),
-                                    nonlinearity=self.transf)
-                if pool_size > 1:
-                    self.log += "\nAdding max pooling layer: %d" % pool_size
-                    l_tmp = Pool2DLayer(l_tmp, pool_size=(pool_size, 1))
-                l_prev = l_tmp
-                print("Conv out shape", get_output_shape(l_prev))
+        l_prev = ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
+        for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
+            self.log += "\nAdding 2D conv layer: %d x %d" % (n_filter, filter_size)
+            l_tmp = Conv2DLayer(l_prev,
+                                num_filters=n_filter,
+                                filter_size=(filter_size, 1),
+                                nonlinearity=self.transf)
+            if pool_size > 1:
+                self.log += "\nAdding max pooling layer: %d" % pool_size
+                l_tmp = Pool2DLayer(l_tmp, pool_size=(pool_size, 1))
+            l_prev = l_tmp
+            print("Conv out shape", get_output_shape(l_prev))
+
+        l_prev = RecurrentConvLayer(l_prev, t=1)
 
         for n_hid in n_hidden:
             self.log += "\nAdding dense layer with %d units" % n_hid
@@ -87,7 +82,7 @@ class CNN(Model):
         self.sym_t = T.matrix('t')
 
     def build_model(self, train_set, test_set, validation_set=None):
-        super(CNN, self).build_model(train_set, test_set, validation_set)
+        super(RCNN, self).build_model(train_set, test_set, validation_set)
 
         epsilon = 1e-8
         loss_cc = aggregate(categorical_crossentropy(
@@ -148,3 +143,34 @@ class CNN(Model):
 
     def model_info(self):
         return self.log
+
+
+def RecurrentConvLayer(input_layer, t=3, num_filters=64, filter_size=(7, 1)):
+    input_conv = Conv2DLayer(incoming=input_layer,
+                             num_filters=num_filters,
+                             filter_size=(1, 1),
+                             stride=1,
+                             pad='same',
+                             W=lasagne.init.Normal(std=std),
+                             nonlinearity=None,
+                             b=None)
+    l_prev = NormalizeLayer(incoming=input_conv)
+    l_prev = NonlinearityLayer(l_prev, nonlinearity=leaky_rectify)
+
+    for _ in range(t):
+        l_prev = Conv2DLayer(incoming=l_prev,
+                             num_filters=num_filters,
+                             filter_size=filter_size,
+                             stride=1,
+                             pad='same',
+                             W=lasagne.init.Normal(std=std),
+                             nonlinearity=None,
+                             b=None)
+        l_prev = ElemwiseSumLayer(incomings=[input_conv, l_prev], coeffs=1)
+        l_prev = NormalizeLayer(incoming=l_prev)
+        l_prev = NonlinearityLayer(l_prev, nonlinearity=leaky_rectify)
+
+    l_pool = Pool2DLayer(incoming=l_prev, pool_size=(2, 1))
+    l_drop = DropoutLayer(l_pool, p=p2)
+    return l_drop
+

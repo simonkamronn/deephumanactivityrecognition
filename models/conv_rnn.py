@@ -1,19 +1,20 @@
 import theano
+theano.config.floatX = 'float32'
 import theano.tensor as T
 import lasagne
 from base import Model
 from lasagne_extensions.nonlinearities import rectify, softmax
-from lasagne.layers import get_output, LSTMLayer, Gate, ConcatLayer, DenseLayer, DropoutLayer, InputLayer, SliceLayer
+from lasagne.layers import *
 import numpy as np
-theano.config.floatX = 'float32'
 CONST_FORGET_B = 1.
 GRAD_CLIP = 5
 
 
-class RNN(Model):
-    def __init__(self, n_in, n_hidden, n_out, downsample=1, ccf=False, grad_clip=GRAD_CLIP, peepholes=False,
-                 trans_func=rectify, out_func=softmax, batch_size=100, dropout_probability=0.0):
-        super(RNN, self).__init__(n_in, n_hidden, n_out, batch_size, trans_func)
+class conv_RNN(Model):
+    def __init__(self, n_in, n_hidden, n_out, n_filters, filter_sizes, pool_sizes, downsample=1, ccf=False,
+                 grad_clip=GRAD_CLIP, peepholes=False, trans_func=rectify, out_func=softmax, batch_size=100,
+                 dropout_probability=0.0):
+        super(conv_RNN, self).__init__(n_in, n_hidden, n_out, batch_size, trans_func)
         self.outf = out_func
         self.n_layers = len(n_hidden)
         self.x = T.tensor3('x')
@@ -32,24 +33,48 @@ class RNN(Model):
         x = np.random.random((batch_size, sequence_length, n_features)).astype(theano.config.floatX)
         sym_x = T.tensor3('x')
 
-        # Downsample input
+        # Down sample input
         if downsample > 1:
-            self.log += "\nDownsampling with a factor of %d" % downsample
-            l_prev = lasagne.layers.FeaturePoolLayer(l_prev, pool_size=downsample, pool_function=T.mean)
+            self.log += "Downsampling with a factor of %d" % downsample
+            l_prev = FeaturePoolLayer(l_prev, pool_size=downsample, pool_function=T.mean)
             sequence_length /= downsample
 
+        # Add a "cross channel feature" layer
         if ccf:
-            self.log += "\nAdding cross-channel feature layer"
-            l_prev = lasagne.layers.ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
-            l_prev = lasagne.layers.Conv2DLayer(l_prev,
-                                                num_filters=n_features*3,
-                                                filter_size=(1, n_features),
-                                                nonlinearity=None)
-            n_features *= 3
-            l_prev = lasagne.layers.ReshapeLayer(l_prev, (batch_size, n_features, sequence_length))
-            l_prev = lasagne.layers.DimshuffleLayer(l_prev, (0, 2, 1))
+            self.log += "Adding cross-channel feature layer"
+            l_prev = ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
+            l_prev = Conv2DLayer(l_prev,
+                                 num_filters=n_features*2,
+                                 filter_size=(1, n_features),
+                                 nonlinearity=None)
+            n_features *= 2
+            l_prev = ReshapeLayer(l_prev, (batch_size, n_features, sequence_length))
+            l_prev = DimshuffleLayer(l_prev, (0, 2, 1))
 
-        print("LSTM input shape", lasagne.layers.get_output(l_prev, sym_x).eval({sym_x: x}).shape)
+        # Adding convolutional layers
+        l_prev = ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
+        for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
+            self.log += "\nAdding 2D conv layer: %d x %d" % (n_filter, filter_size)
+            l_prev = Conv2DLayer(l_prev,
+                                 num_filters=n_filter,
+                                 filter_size=(filter_size, 1),
+                                 nonlinearity=self.transf,
+                                 pad=(filter_size//2, 0),
+                                 stride=(1, 1))
+            sequence_length /= 1
+
+            if pool_size > 1:
+                self.log += "\nAdding max pooling layer: %d" % pool_size
+                l_prev = MaxPool2DLayer(l_prev, pool_size=(pool_size, 1))
+                sequence_length /= pool_size
+        print("Conv out shape", get_output(l_prev, sym_x).eval({sym_x: x}).shape)
+
+        # Reshape for LSTM
+        l_prev = DimshuffleLayer(l_prev, (0, 2, 1, 3))
+        l_prev = ReshapeLayer(l_prev, (batch_size, sequence_length, -1))
+
+        # Add BLSTM layers
+        print("LSTM input shape", get_output(l_prev, sym_x).eval({sym_x: x}).shape)
         for n_hid in n_hidden:
             self.log += "\nAdding BLSTM layer with %d units" % n_hid
             l_forward = LSTMLayer(
@@ -107,7 +132,7 @@ class RNN(Model):
         self.model = DenseLayer(l_prev, num_units=n_out, nonlinearity=out_func)
 
     def build_model(self, *args):
-        super(RNN, self).build_model(*args)
+        super(conv_RNN, self).build_model(*args)
 
         epsilon = 1e-8
         loss_train = self.loss(

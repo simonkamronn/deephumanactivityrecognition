@@ -93,15 +93,11 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=None
     # RecurrentLayers, one with the backwards=True keyword argument.
     # Setting a value for grad_clipping will clip the gradients in the layer
     l_prev = l_in
-    num_layers = 3
+    num_layers = 1
     for _ in range(num_layers):
         l_forward = LSTMLayer(
             l_prev,
             num_units=N_HIDDEN/2,
-            ingate=Gate(
-                W_in=lasagne.init.HeUniform(),
-                W_hid=lasagne.init.HeUniform()
-            ),
             grad_clipping=GRAD_CLIP,
             forgetgate=Gate(
                 b=lasagne.init.Constant(CONST_FORGET_B)
@@ -111,10 +107,6 @@ def build_model(output_dim, batch_size=BATCH_SIZE, seq_len=None, n_features=None
         l_backward = LSTMLayer(
             l_prev,
             num_units=N_HIDDEN/2,
-            ingate=Gate(
-                W_in=lasagne.init.HeUniform(),
-                W_hid=lasagne.init.HeUniform()
-            ),
             grad_clipping=GRAD_CLIP,
             forgetgate=Gate(
                 b=lasagne.init.Constant(CONST_FORGET_B)
@@ -294,6 +286,7 @@ def main(num_epochs=NUM_EPOCHS):
                 break
             if epoch['number'] >= num_epochs:
                 break
+
         # Save figure
         if epoch['number'] == num_epochs:
             ax = pd.DataFrame(np.asarray(results), columns=['Training loss', 'Validation loss', 'Validation accuracy'])\

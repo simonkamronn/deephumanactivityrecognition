@@ -11,6 +11,7 @@ import pandas as pd
 import glob as glob
 import numpy as np
 from scipy.io import loadmat
+from scipy import interpolate
 from sklearn.cross_validation import StratifiedShuffleSplit
 import itertools
 from har_utils import roll, pitch, expand_target
@@ -28,7 +29,7 @@ class LoadHAR(object):
             raise RuntimeError('Invalid folder')
 
     def uci_hapt(self, add_pitc=False, add_roll=False):
-        subfolder = '/UCI/HAPT Data Set/RawData/'
+        subfolder = 'UCI/HAPT Data Set/RawData/'
         files = glob.glob(self.root_folder + subfolder + 'acc_*')
 
         data = dict()
@@ -38,9 +39,10 @@ class LoadHAR(object):
     def uci_har_v1(self, add_pitch=False, add_roll=False, expand=False):
         """
         Data from Ortiz
+        Sampling rate: 50hz
         :return:
         """
-        sub_folder = '/UCI/UCI HAR Dataset v1/'
+        sub_folder = 'UCI/UCI HAR Dataset v1/'
         test_folder = self.root_folder + sub_folder + 'test/'
         train_folder = self.root_folder + sub_folder + 'train/'
 
@@ -67,47 +69,57 @@ class LoadHAR(object):
         data['y_train'] = one_hot(pd.read_csv(train_folder + 'y_train.txt', squeeze=True).values - 1)
         data['y_test'] = one_hot(pd.read_csv(test_folder + 'y_test.txt', squeeze=True).values - 1)
 
-        if expand:
-            data['y_train'] = expand_target(data['y_train'], data['x_test'].shape[1])
-            data['y_test'] = expand_target(data['y_test'], data['x_test'].shape[1])
-
         # Load precomputed features
         features = pd.read_csv(self.root_folder + sub_folder + "/features.txt", header=None, sep=";", names=['features'], squeeze=True).str.strip()
         features_filt = features[features.str.contains(r't\w*Acc')]
         data['x_test_features'] = pd.read_csv(test_folder + 'X_test.txt', sep=r'\s+', names=features)[features_filt].values
         data['x_train_features'] = pd.read_csv(train_folder + 'X_train.txt', sep=r'\s+', names=features)[features_filt].values
 
-        data_mean = np.mean((data['x_test'].mean(), data['x_train'].mean()))
-        data_std = np.mean((data['x_test'].std(), data['x_train'].std()))
+        data = add_features(data, normalise=True, ratio=1, add_roll=add_roll, add_pitch=add_pitch, expand=expand)
 
-        print("Data mean: %f, Data std: %f" % (data_mean, data_std))
-
-        # Downsample to 64 samples per window i.e. 25Hz
-        ratio = 1
-        for key in ['x_test', 'x_train']:
-            n_win, n_samp, n_dim = data[key].shape
-            if ratio > 1:
-                data[key] = downsample(data[key].reshape(-1, n_dim), ratio=ratio).\
-                    reshape(n_win, n_samp/ratio, n_dim)
-
-            # Data normalisation
-            data[key] = data[key] - data_mean
-            data[key] = data[key]/data_std
-
-            # Add pitch and roll
-            if add_pitch:
-                pitches = []
-                for i in range(n_win):
-                    pitches.append(pitch(data[key][i]))
-                data[key] = np.concatenate((data[key], pitches), axis=2)
-
-            if add_roll:
-                rolls = []
-                for i in range(n_win):
-                    rolls.append(roll(data[key][i,:,:3]))
-                data[key] = np.concatenate((data[key], rolls), axis=2)
         # np.savez('data/uci_har_v1_theia.npz', x_train=data['x_train'], y_train=data['y_train'], x_test=data['x_test'], y_test=data['y_test'])
-        return return_shared_tuple(data)
+        return return_tuple(data)
+
+    def wisdm(self, add_pitch=False, add_roll=False, expand=False):
+        """
+        Sampling rate: 20hz
+        User: 1-36
+        Activity: Walking, jogging, sitting, standing, upstairs, downstairs
+        :return: shared tuple of data
+        """
+        sub_folder = 'WISDM Actitracker/Lab/'
+        filename = 'WISDM_ar_v1.1_raw.txt'
+        columns = ['user','activity','timestamp','x','y','z']
+        df = pd.read_csv(self.root_folder + sub_folder + filename, names=columns, lineterminator=';')
+        df = df.dropna()
+        activity_map = {'Walking':0, 'Jogging':7, 'Sitting':4, 'Standing':5, 'Upstairs':2, 'Downstairs':3}
+        df['activity'] = df['activity'].apply(lambda x: activity_map[x])
+
+        # Normalise data
+        df_tmp = df[['x','y','z']]
+        df_tmp = df_tmp - df_tmp.mean().mean()
+        df[['x','y','z']] = df_tmp / df_tmp.var().mean()
+
+        n_samples = 50
+        tmp = np.empty((0, n_samples, 4))
+        for user in df['user'].unique():
+            tmp = np.concatenate((tmp,
+                                 window_segment(df[['x', 'y', 'z','activity']][df['user'] == user].values,
+                                                n_samples=n_samples)), axis=0)
+
+        data = dict()
+        for train_index, test_index in StratifiedShuffleSplit(tmp[:, 0, -1],
+                                                              n_iter=1,
+                                                              test_size=0.2,
+                                                              random_state=1):
+            data['x_train'], data['x_test'] = tmp[train_index, :, :3], tmp[test_index, :, :3]
+            data['y_train'], data['y_test'] = one_hot(tmp[train_index, 0, -1].astype('int')), \
+                                              one_hot(tmp[test_index, 0, -1].astype('int'))
+
+        ratio = 1
+        data = add_features(data, False, ratio, add_roll, add_pitch, expand)
+
+        return return_tuple(data)
 
     def skoda(self):
         """
@@ -154,7 +166,7 @@ class LoadHAR(object):
             data['x_train'], data['x_test'] = tmp_seg[train_index, :, :3], tmp_seg[test_index, :, :3]
             data['y_train'], data['y_test'] = one_hot(tmp_seg[train_index, 0, -1].astype('int')), \
                                               one_hot(tmp_seg[test_index, 0, -1].astype('int'))
-        return return_shared_tuple(data)
+        return return_tuple(data)
 
     def idash(self):
         """
@@ -187,7 +199,7 @@ class LoadHAR(object):
             data['x_train'], data['x_test'] = tmp_seg[train_index], tmp_seg[test_index]
             data['y_train'], data['y_test'] = one_hot(target[train_index].astype('int')), \
                                               one_hot(target[test_index].astype('int'))
-        return return_shared_tuple(data)
+        return return_tuple(data)
 
     def pamap2(self):
         pass
@@ -228,8 +240,7 @@ def downsample(data, ratio=2):
     n_resamp = n_samp/ratio
 
     # Reshape, mean and shape back
-    data = np.reshape(data[:n_resamp*ratio], (n_resamp, ratio, n_dim))
-    data = np.mean(data, axis=1)
+    data = np.reshape(data[:n_resamp*ratio], (n_resamp, ratio, n_dim)).mean(axis=1)
     return data
 
 def window_segment(data, n_samples = 64):
@@ -239,19 +250,60 @@ def window_segment(data, n_samples = 64):
     data = np.reshape(data[:n_win*n_samples], (n_win, n_samples, n_dim))
     return data
 
+def add_features(data, normalise=True, ratio=0, add_roll=False, add_pitch=False, expand=False):
+
+    if normalise:
+        data_mean = np.mean((data['x_test'].mean(), data['x_train'].mean()))
+        data_var = np.mean((data['x_test'].var(), data['x_train'].var()))
+        print("Data mean: %f, Data variance: %f" % (data_mean, data_var))
+
+    for key in ['x_test', 'x_train']:
+        n_win, n_samp, n_dim = data[key].shape
+        if ratio > 1:
+            data[key] = downsample(data[key].reshape(-1, n_dim), ratio=ratio).\
+                reshape(n_win, n_samp/ratio, n_dim)
+
+        if normalise:
+            # Data normalisation
+            print("Normalising data")
+            data[key] = data[key] - data_mean
+            data[key] = data[key]/data_var
+
+        # Add pitch and roll
+        if add_pitch:
+            print("Adding pitch")
+            pitches = []
+            for i in range(n_win):
+                pitches.append(pitch(data[key][i]))
+            data[key] = np.concatenate((data[key], pitches), axis=2)
+
+        if add_roll:
+            print("Adding roll")
+            rolls = []
+            for i in range(n_win):
+                rolls.append(roll(data[key][i,:,:3]))
+            data[key] = np.concatenate((data[key], rolls), axis=2)
+
+    if expand:
+        print("Expanding targets")
+        data['y_train'] = expand_target(data['y_train'], data['x_test'].shape[1])
+        data['y_test'] = expand_target(data['y_test'], data['x_test'].shape[1])
+
+    return data
+
 def shared_dataset(data_xy, borrow=False):
     x, y = data_xy
     shared_x = theano.shared(np.asarray(x, dtype=theano.config.floatX), borrow=borrow)
     shared_y = theano.shared(np.asarray(y, dtype=theano.config.floatX), borrow=borrow)
     return shared_x, shared_y
 
-def return_shared_tuple(data):
+def return_tuple(data):
     n_train, sequence_length, n_features = data['x_train'].shape
     n_classes = data['y_train'].shape[-1]
     print('Sequence: %d' % sequence_length)
     print('Features: %d' % n_features)
     print('Classes: %d' % n_classes)
-    return shared_dataset((data['x_train'].astype(theano.config.floatX), data['y_train'].astype(theano.config.floatX))), \
-           shared_dataset((data['x_test'].astype(theano.config.floatX), data['y_test'].astype(theano.config.floatX))), \
-           shared_dataset((data['x_test'].astype(theano.config.floatX), data['y_test'].astype(theano.config.floatX))), \
+    return (data['x_train'], data['y_train']), \
+           (data['x_test'], data['y_test']), \
+           (data['x_test'], data['y_test']), \
            (int(sequence_length), int(n_features), int(n_classes))

@@ -295,15 +295,17 @@ def main(num_epochs=NUM_EPOCHS):
 
             results.append([epoch['train_loss'], epoch['valid_loss'], epoch['valid_accuracy']])
 
-            if epoch['train_loss'] is np.nan:
+            if np.isnan(epoch['train_loss']):
                 break
             if epoch['number'] >= num_epochs:
                 break
+
         # Save figure
-        ax = pd.DataFrame(np.asarray(results), columns=['Training loss', 'Validation loss', 'Validation accuracy'])\
-            .plot()
-        fig = ax.get_figure()
-        fig.savefig("%s-%s" % (NAME, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
+        if epoch['number'] == num_epochs:
+            ax = pd.DataFrame(np.asarray(results), columns=['Training loss', 'Validation loss', 'Validation accuracy'])\
+                .plot()
+            fig = ax.get_figure()
+            fig.savefig("%s-%s" % (NAME, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")))
 
     except KeyboardInterrupt:
         pass

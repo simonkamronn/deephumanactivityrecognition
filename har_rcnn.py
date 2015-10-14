@@ -1,12 +1,12 @@
 import theano.sandbox.cuda
-theano.sandbox.cuda.use('gpu0')
-from models.cnn import CNN
+theano.sandbox.cuda.use('gpu3')
+from models.rcnn import RCNN
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax
 import load_data as ld
 
 
-def run_cnn():
+def main():
     add_pitch, add_roll = True, True
     batch_size = 128
     train_set, test_set, valid_set, (sequence_length, n_features, n_classes) = \
@@ -18,26 +18,25 @@ def run_cnn():
     n_test_batches = n_test//batch_size
     n_valid_batches = n_test//batch_size
 
-    model = CNN(n_in=(sequence_length, n_features),
-                n_filters=[64, 64, 64, 64],
-                filter_sizes=[5, 3, 3, 3],
-                pool_sizes=[2, 2, 2, 0],
-                n_hidden=[512],
-                n_out=n_classes,
-                downsample=2,
-                sum_channels=False,
-                ccf=True,
-                trans_func=rectify,
-                out_func=softmax,
-                batch_size=batch_size,
-                dropout_probability=0)
+    model = RCNN(n_in=(sequence_length, n_features),
+                 n_filters=[],
+                 filter_sizes=[],
+                 pool_sizes=[],
+                 n_hidden=[],
+                 n_out=n_classes,
+                 downsample=0,
+                 ccf=False,
+                 trans_func=rectify,
+                 out_func=softmax,
+                 batch_size=batch_size,
+                 dropout_probability=0)
 
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
                                                                                           test_set,
                                                                                           valid_set)
     train_args['inputs']['batchsize'] = batch_size
-    train_args['inputs']['learningrate'] = 0.001
-    train_args['inputs']['beta1'] = 0.9
+    train_args['inputs']['learningrate'] = 0.0005
+    train_args['inputs']['beta1'] = 0.8
     train_args['inputs']['beta2'] = 0.999
 
     test_args['inputs']['batchsize'] = batch_size
@@ -58,7 +57,7 @@ def run_cnn():
                       n_train_batches=n_train_batches,
                       n_test_batches=n_test_batches,
                       n_valid_batches=n_valid_batches,
-                      n_epochs=200)
+                      n_epochs=1000)
 
 if __name__ == "__main__":
-    run_cnn()
+    main()
