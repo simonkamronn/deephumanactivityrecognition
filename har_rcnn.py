@@ -35,7 +35,7 @@ def main():
                                                                                           test_set,
                                                                                           valid_set)
     train_args['inputs']['batchsize'] = batch_size
-    train_args['inputs']['learningrate'] = 0.0005
+    train_args['inputs']['learningrate'] = 0.001
     train_args['inputs']['beta1'] = 0.8
     train_args['inputs']['beta2'] = 0.999
 

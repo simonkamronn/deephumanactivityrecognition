@@ -9,7 +9,7 @@ from lasagne.layers import get_output, get_output_shape, DenseLayer, DropoutLaye
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
 # from lasagne.layers.dnn import Conv2DDNNLayer as
 # from lasagne.layers.dnn import Pool2DDNNLayer as
-from lasagne_extensions.layers.batchnormlayer import NormalizeLayer
+from lasagne_extensions.layers.batchnormlayer import NormalizeLayer, ScaleAndShiftLayer
 from lasagne_extensions.updates import adam
 
 
@@ -149,28 +149,33 @@ def RecurrentConvLayer(input_layer, t=3, num_filters=64, filter_size=(7, 1)):
     input_conv = Conv2DLayer(incoming=input_layer,
                              num_filters=num_filters,
                              filter_size=(1, 1),
-                             stride=1,
+                             stride=(1, 1),
                              pad='same',
                              W=lasagne.init.Normal(std=std),
                              nonlinearity=None,
                              b=None)
-    l_prev = NormalizeLayer(incoming=input_conv)
-    l_prev = NonlinearityLayer(l_prev, nonlinearity=leaky_rectify)
+    l_prev = BatchNormalizeLayer(input_conv)
+    l_prev = Pool2DLayer(incoming=l_prev, pool_size=(2, 1))
 
     for _ in range(t):
         l_prev = Conv2DLayer(incoming=l_prev,
                              num_filters=num_filters,
                              filter_size=filter_size,
-                             stride=1,
+                             stride=(1, 1),
                              pad='same',
                              W=lasagne.init.Normal(std=std),
                              nonlinearity=None,
                              b=None)
         l_prev = ElemwiseSumLayer(incomings=[input_conv, l_prev], coeffs=1)
-        l_prev = NormalizeLayer(incoming=l_prev)
-        l_prev = NonlinearityLayer(l_prev, nonlinearity=leaky_rectify)
+        l_prev = BatchNormalizeLayer(l_prev)
 
     l_pool = Pool2DLayer(incoming=l_prev, pool_size=(2, 1))
     l_drop = DropoutLayer(l_pool, p=p2)
     return l_drop
 
+
+def BatchNormalizeLayer(incoming, nonlinearity=leaky_rectify):
+    l_prev = NormalizeLayer(incoming, alpha=0.5)
+    l_prev = ScaleAndShiftLayer(l_prev)
+    l_prev = NonlinearityLayer(l_prev, nonlinearity=nonlinearity)
+    return l_prev
