@@ -42,7 +42,6 @@ class CNN(Model):
             n_features *= 4
             l_prev = ReshapeLayer(l_prev, (batch_size, n_features, sequence_length))
             l_prev = DimshuffleLayer(l_prev, (0, 2, 1))
-            l_prev = NormalizeLayer(l_prev)
 
         if sum_channels:
             l_prev = DimshuffleLayer(l_prev, (0, 2, 1))
@@ -60,6 +59,7 @@ class CNN(Model):
                 print("Conv out shape", get_output_shape(l_prev))
         else:
             l_prev = ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
+            l_prev = DimshuffleLayer(l_prev, (0, 3, 2, 1))
             for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
                 self.log += "\nAdding 2D conv layer: %d x %d" % (n_filter, filter_size)
                 l_tmp = Conv2DLayer(l_prev,
