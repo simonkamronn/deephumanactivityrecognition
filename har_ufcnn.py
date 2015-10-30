@@ -1,5 +1,5 @@
 import theano.sandbox.cuda
-theano.sandbox.cuda.use('gpu1')
+theano.sandbox.cuda.use('gpu3')
 from models.ufcnn import UFCNN
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify
@@ -7,8 +7,8 @@ import load_data as ld
 
 
 def main():
-    add_pitch, add_roll, add_filter = False, False, False
-    batch_size = 64
+    add_pitch, add_roll, add_filter = False, False, True
+    batch_size = 128
     train_set, test_set, valid_set, (sequence_length, n_features, n_classes) = \
         ld.LoadHAR().uci_har_v1(add_pitch=add_pitch, add_roll=add_roll, add_filter=add_filter)
     n_train = train_set[0].shape[0]
@@ -22,7 +22,7 @@ def main():
 
     model = UFCNN(n_in=(sequence_length, n_features),
                   n_filters=64,
-                  filter_size=7,
+                  filter_size=3,
                   pool_sizes=0,
                   n_hidden=[512],
                   dropout_probability=0.0,
@@ -36,7 +36,7 @@ def main():
                                                                                           test_set,
                                                                                           valid_set)
     train_args['inputs']['batchsize'] = batch_size
-    train_args['inputs']['learningrate'] = 0.003
+    train_args['inputs']['learningrate'] = 0.001
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
 
