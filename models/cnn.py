@@ -7,13 +7,14 @@ from lasagne_extensions.nonlinearities import rectify, softmax
 from lasagne.layers import get_output, get_output_shape, DenseLayer, DropoutLayer, InputLayer, FeaturePoolLayer, \
     ReshapeLayer, DimshuffleLayer, get_all_params, Conv1DLayer, MaxPool1DLayer, Conv2DLayer, Pool2DLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
-from lasagne_extensions.layers.batchnormlayer import NormalizeLayer
+from lasagne_extensions.layers.batch_norm import batch_norm as batch_norm_layer
 from lasagne_extensions.updates import adam
 
 
 class CNN(Model):
     def __init__(self, n_in, n_filters, filter_sizes, n_out, pool_sizes=None, n_hidden=(512), downsample=1, ccf=False,
-                 sum_channels=False, batch_size=100, trans_func=rectify, out_func=softmax, dropout_probability=0.0):
+                 sum_channels=False, batch_size=100, trans_func=rectify, out_func=softmax, dropout_probability=0.0,
+                 batch_norm=False):
         super(CNN, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.outf = out_func
         self.log = ""
@@ -38,8 +39,10 @@ class CNN(Model):
             l_prev = Conv2DLayer(l_prev,
                                  num_filters=4*n_features,
                                  filter_size=(1, n_features),
-                                 nonlinearity=lasagne.nonlinearities.linear)
+                                 nonlinearity=None)
             n_features *= 4
+            if batch_norm:
+                l_prev = batch_norm_layer(l_prev)
             l_prev = ReshapeLayer(l_prev, (batch_size, n_features, sequence_length))
             l_prev = DimshuffleLayer(l_prev, (0, 2, 1))
 
@@ -47,35 +50,39 @@ class CNN(Model):
             l_prev = DimshuffleLayer(l_prev, (0, 2, 1))
             for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
                 self.log += "\nAdding 1D conv layer: %d x %d" % (n_filter, filter_size)
-                l_tmp = Conv1DLayer(l_prev,
-                                    num_filters=n_filter,
-                                    filter_size=filter_size,
-                                    nonlinearity=self.transf,
-                                    b=lasagne.init.Constant(1.))
+                l_prev = Conv1DLayer(l_prev,
+                                     num_filters=n_filter,
+                                     filter_size=filter_size,
+                                     nonlinearity=self.transf,
+                                     b=lasagne.init.Constant(1.))
+                if batch_norm:
+                    l_prev = batch_norm_layer(l_prev)
                 if pool_size > 1:
                     self.log += "\nAdding max pooling layer: %d" % pool_size
-                    l_tmp = MaxPool1DLayer(l_tmp, pool_size=pool_size)
-                l_prev = l_tmp
+                    l_prev = MaxPool1DLayer(l_prev, pool_size=pool_size)
                 print("Conv out shape", get_output_shape(l_prev))
         else:
             l_prev = ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
             # l_prev = DimshuffleLayer(l_prev, (0, 3, 2, 1))
             for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
                 self.log += "\nAdding 2D conv layer: %d x %d" % (n_filter, filter_size)
-                l_tmp = Conv2DLayer(l_prev,
-                                    num_filters=n_filter,
-                                    filter_size=(filter_size, 1),
-                                    nonlinearity=self.transf)
+                l_prev = Conv2DLayer(l_prev,
+                                     num_filters=n_filter,
+                                     filter_size=(filter_size, 1),
+                                     nonlinearity=self.transf)
+                if batch_norm:
+                    l_prev = batch_norm_layer(l_prev)
                 if pool_size > 1:
                     self.log += "\nAdding max pooling layer: %d" % pool_size
-                    l_tmp = Pool2DLayer(l_tmp, pool_size=(pool_size, 1))
-                l_prev = l_tmp
+                    l_prev = Pool2DLayer(l_prev, pool_size=(pool_size, 1))
                 print("Conv out shape", get_output_shape(l_prev))
 
         for n_hid in n_hidden:
             self.log += "\nAdding dense layer with %d units" % n_hid
             print("Dense input shape", get_output_shape(l_prev))
             l_prev = DenseLayer(l_prev, num_units=n_hid, nonlinearity=self.transf)
+            if batch_norm:
+                l_prev = batch_norm_layer(l_prev)
         if dropout:
             self.log += "\nAdding output dropout with probability %.2f" % dropout_probability
             l_prev = DropoutLayer(l_prev, p=dropout_probability)
