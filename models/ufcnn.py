@@ -4,7 +4,7 @@ import theano.tensor as T
 from base import Model
 from lasagne_extensions.nonlinearities import rectify, softmax
 from lasagne.layers import get_output, get_output_shape, DenseLayer, InputLayer, \
-     get_all_params, Conv2DLayer, ConcatLayer, ReshapeLayer, DimshuffleLayer
+     get_all_params, Conv2DLayer, ConcatLayer, ReshapeLayer, DimshuffleLayer, DropoutLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
 from lasagne_extensions.updates import adam, rmsprop
 import numpy as np
@@ -36,12 +36,10 @@ class UFCNN(Model):
 
         l_h1 = Conv2DLayer(l_prev, num_filters=n_filters, filter_size=(filter_size, 1),
                            nonlinearity=self.transf, pad='same', name='h1')
-        print(l_h1.W.get_value().shape)
         self.log += "\n%s:\t %s" % (l_h1.name, get_output_shape(l_h1))
 
         l_h2 = Conv2DLayer(l_h1, num_filters=n_filters, filter_size=(filter_size*2+1, 1),
                            nonlinearity=self.transf, pad='same', name='h2')
-        print(l_h2.W.get_value().shape)
         self.log += "\n%s:\t %s" % (l_h2.name, get_output_shape(l_h2))
 
         l_h3 = Conv2DLayer(l_h2, num_filters=n_filters, filter_size=(filter_size*4+1, 1),
@@ -68,6 +66,10 @@ class UFCNN(Model):
         l_prev = l_g1
         for n_hid in n_hidden:
             l_prev = DenseLayer(l_prev, num_units=n_hid, nonlinearity=self.transf)
+            self.log += "\nAdding dense layer with %d units" % n_hid
+            if dropout_probability:
+                l_prev = DropoutLayer(l_prev, p=dropout_probability)
+                self.log += "\nAdding dropout layer with p=%.3f" % dropout_probability
         self.model = DenseLayer(l_prev, num_units=n_out, nonlinearity=out_func)
         self.model_params = get_all_params(self.model)
 
@@ -91,15 +93,12 @@ class UFCNN(Model):
         grads = T.grad(loss_cc, all_params)
         for idx, param in enumerate(all_params):
             param_name = param.name
-            if 'h2.W' in param_name:
+            if ('h2.W' in param_name) or ('g2.W' in param_name):
                 print(param_name)
                 grads[idx] *= self.l2_mask
-            if 'h3.W' in param_name:
+            if ('h3.W' in param_name) or ('g3.W' in param_name):
                 print(param_name)
                 grads[idx] *= self.l3_mask
-            if 'g2.W' in param_name:
-                print(param_name)
-                grads[idx] *= self.l2_mask
 
         sym_beta1 = T.scalar('beta1')
         sym_beta2 = T.scalar('beta2')
