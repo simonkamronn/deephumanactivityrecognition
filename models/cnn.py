@@ -83,9 +83,12 @@ class CNN(Model):
             l_prev = DenseLayer(l_prev, num_units=n_hid, nonlinearity=self.transf)
             if batch_norm:
                 l_prev = batch_norm_layer(l_prev)
-        if dropout:
-            self.log += "\nAdding output dropout with probability %.2f" % dropout_probability
-            l_prev = DropoutLayer(l_prev, p=dropout_probability)
+            if dropout:
+                self.log += "\nAdding output dropout with probability %.2f" % dropout_probability
+                l_prev = DropoutLayer(l_prev, p=dropout_probability)
+
+        if batch_norm:
+            self.log += "\nUsing batch normalization"
 
         self.model = DenseLayer(l_prev, num_units=n_out, nonlinearity=out_func)
         self.model_params = get_all_params(self.model)
