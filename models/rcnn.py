@@ -68,7 +68,7 @@ class RCNN(Model):
             print("Conv out shape", get_output_shape(l_prev))
 
         # Recurrent Convolutional layers
-        filter_size = 7
+        filter_size = filter_sizes[0]
         for t in rcl:
             self.log += "\nAdding recurrent conv layer with t=%d time steps and filter size: %s" % (t, filter_size)
             l_prev = RecurrentConvLayer(l_prev,
@@ -94,6 +94,8 @@ class RCNN(Model):
         if dropout:
             self.log += "\nAdding output dropout with probability %.2f" % dropout_probability
             l_prev = DropoutLayer(l_prev, p=dropout_probability)
+        if batch_norm:
+            self.log += "\nUsing batch normalization"
 
         self.model = DenseLayer(l_prev, num_units=n_out, nonlinearity=out_func)
         self.model_params = get_all_params(self.model)
