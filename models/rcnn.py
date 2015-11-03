@@ -65,6 +65,8 @@ class RCNN(Model):
             if pool_size > 1:
                 self.log += "\nAdding max pooling layer: %d" % pool_size
                 l_prev = Pool2DLayer(l_prev, pool_size=(pool_size, 1))
+            self.log += "\nAdding dropout layer: %.2f" % 0.25
+            l_prev = DropoutLayer(l_prev, p=0.25)
             print("Conv out shape", get_output_shape(l_prev))
 
         # Recurrent Convolutional layers
@@ -76,10 +78,10 @@ class RCNN(Model):
                                         filter_size=filter_size,
                                         nonlinearity=self.transf,
                                         normalize=batch_norm)
-            self.log += "\nAdding max pool layer of size 2"
+            self.log += "\nAdding max pool layer: 2"
             l_prev = Pool2DLayer(l_prev, pool_size=(2, 1))
             if rcl_dropout > 0.0:
-                self.log += "\nAdding dropout layer with probability %.2f" % rcl_dropout
+                self.log += "\nAdding dropout layer: %.2f" % rcl_dropout
                 l_prev = DropoutLayer(l_prev, p=rcl_dropout)
             print("RCL out shape", get_output_shape(l_prev))
 
