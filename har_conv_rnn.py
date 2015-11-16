@@ -1,48 +1,88 @@
 import theano.sandbox.cuda
-theano.sandbox.cuda.use('gpu2')
+theano.sandbox.cuda.use('gpu1')
 from models.conv_rnn import conv_RNN
 from training.train import TrainModel
-from lasagne.objectives import categorical_crossentropy
-from lasagne.nonlinearities import rectify, softmax, tanh
-from lasagne.updates import adam, nesterov_momentum, rmsprop
+from lasagne.nonlinearities import rectify, softmax
 import load_data as ld
+import numpy as np
 
 
-def run_rnn():
-    add_pitch, add_roll = False, False
-    train_set, test_set, valid_set, (sequence_length, n_features, n_classes) = \
-        ld.LoadHAR().uci_har_v1(add_pitch, add_roll)
+def main():
+    add_pitch, add_roll, add_filter = False, False, True
+    batch_size = 64
+    (train_set, test_set, valid_set, (sequence_length, n_features, n_classes)), name = \
+        ld.LoadHAR().uci_hapt(add_pitch=add_pitch, add_roll=add_roll, add_filter=add_filter)
 
+    # The data is structured as (samples, sequence, features) but to properly use the convolutional RNN we need a longer
+    # time
+    factor = 8
+    n_train = train_set[0].shape[0]//factor
+    sequence_length *= factor
+
+    train_set = (np.reshape(train_set[0][:factor*n_train], (n_train, sequence_length, n_features)),
+                 np.reshape(train_set[1][:factor*n_train], (n_train, factor, n_classes)))
+
+    n_test = test_set[0].shape[0]//factor
+    test_set = (np.reshape(test_set[0][:factor*n_test], (n_test, sequence_length, n_features)),
+                np.reshape(test_set[1][:factor*n_test], (n_test, factor, n_classes)))
+
+    valid_set = test_set
+
+    n_train = train_set[0].shape[0]
+    n_test = test_set[0].shape[0]
+    n_valid = valid_set[0].shape[0]
+
+    n_train_batches = n_train//batch_size
+    n_test_batches = n_test//batch_size
+    n_valid_batches = n_valid//batch_size
+
+    print("n_train_batches: %d, n_test_batches: %d, n_valid_batches: %d"
+          % (n_train_batches, n_test_batches, n_valid_batches))
+
+    n_conv = 4
     model = conv_RNN(n_in=(sequence_length, n_features),
-                     n_hidden=[128, 128, 128],
-                     n_filters=[20],
-                     filter_sizes=[3],
-                     pool_sizes=[2],
+                     n_filters=[64]*n_conv,
+                     filter_sizes=[5]*n_conv,
+                     pool_sizes=[2]*n_conv,
+                     n_hidden=[200, 200],
+                     dropout_probability=0.5,
                      n_out=n_classes,
-                     grad_clip=5,
-                     downsample=2,
+                     downsample=1,
                      ccf=False,
-                     trans_func=None,
+                     trans_func=rectify,
                      out_func=softmax,
-                     batch_size=128,
-                     dropout_probability=0.0)
+                     batch_size=batch_size)
 
-    model_id = '20151001163030'
-    model.load_model(model_id)
-    model.log += '\nLoading model: %s' % model_id
+    f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
+                                                                                          test_set,
+                                                                                          valid_set)
+    train_args['inputs']['batchsize'] = batch_size
+    train_args['inputs']['learningrate'] = 0.003
+    train_args['inputs']['beta1'] = 0.9
+    train_args['inputs']['beta2'] = 0.999
+
+    test_args['inputs']['batchsize'] = batch_size
+    validate_args['inputs']['batchsize'] = batch_size
+
+    model.log += "\nDataset: %s" % name
     model.log += "\nAdd pitch: %s\nAdd roll: %s" % (add_pitch, add_roll)
-    update_args = (.003, 0.95, 1e-6)
-    model.log += '\nOptimizer: rmsprop'
-    model.log += '\nUpdate args: %s' % (update_args,)
-    train = TrainModel(model,
-                       train_set, test_set, valid_set,
-                       loss=categorical_crossentropy,
-                       update=rmsprop,
-                       update_args=update_args,
-                       eval_freq=100,
-                       pickle=True,
-                       custom_eval_func=None)
-    train.train_model(1000)
+    model.log += "\nAdd filter separated signals: %s" % add_filter
+    model.log += "\nTransfer function: %s" % model.transf.__name__
+    train = TrainModel(model=model,
+                       anneal_lr=0.9,
+                       anneal_lr_freq=50,
+                       output_freq=1,
+                       pickle_f_custom_freq=100,
+                       f_custom_eval=None)
+    train.pickle = True
+    train.add_initial_training_notes("")
+    train.train_model(f_train, train_args,
+                      f_test, test_args,
+                      f_validate, validate_args,
+                      n_train_batches=n_train_batches,
+                      n_test_batches=n_test_batches,
+                      n_valid_batches=n_valid_batches,
+                      n_epochs=2000)
 
 if __name__ == "__main__":
-    run_rnn()
+    main()
