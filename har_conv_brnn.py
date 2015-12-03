@@ -1,6 +1,6 @@
 #import theano.sandbox.cuda
-#theano.sandbox.cuda.use('gpu0')
-from models.conv_rnn import conv_RNN
+#theano.sandbox.cuda.use('gpuo')
+from models.conv_brnn import conv_BRNN
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify
 import load_data as ld
@@ -40,18 +40,18 @@ def main():
           % (n_train_batches, n_test_batches, n_valid_batches))
 
     n_conv = 3
-    model = conv_RNN(n_in=(sequence_length, n_features),
-                     n_filters=[64]*n_conv,
-                     filter_sizes=[5]*n_conv,
-                     pool_sizes=[2]*n_conv,
-                     n_hidden=[100, 100],
-                     conv_dropout=0.1,
-                     dropout_probability=0.5,
-                     n_out=n_classes,
-                     downsample=1,
-                     trans_func=rectify,
-                     out_func=softmax,
-                     batch_size=batch_size)
+    model = conv_BRNN(n_in=(sequence_length, n_features),
+                      n_filters=[64]*n_conv,
+                      filter_sizes=[5]*n_conv,
+                      pool_sizes=[2]*n_conv,
+                      n_hidden=[100, 100],
+                      conv_dropout=0.1,
+                      dropout_probability=0.5,
+                      n_out=n_classes,
+                      downsample=1,
+                      trans_func=rectify,
+                      out_func=softmax,
+                      batch_size=batch_size)
 
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
                                                                                           test_set,

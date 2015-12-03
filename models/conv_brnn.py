@@ -11,11 +11,11 @@ CONST_FORGET_B = 1.
 GRAD_CLIP = 5
 
 
-class conv_RNN(Model):
+class conv_BRNN(Model):
     def __init__(self, n_in, n_hidden, n_out, n_filters, filter_sizes, pool_sizes, downsample=1,
                  grad_clip=GRAD_CLIP, peepholes=False, trans_func=rectify, out_func=softmax, batch_size=128,
                  dropout_probability=0.0, factor=8, conv_dropout=0.0):
-        super(conv_RNN, self).__init__(n_in, n_hidden, n_out, trans_func)
+        super(conv_BRNN, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.outf = out_func
         self.log = ""
 
@@ -38,6 +38,7 @@ class conv_RNN(Model):
             l_prev = Conv2DLayer(l_prev,
                                  num_filters=n_filter,
                                  filter_size=(filter_size, 1),
+                                 pad="same",
                                  nonlinearity=self.transf)
             if pool_size > 1:
                 self.log += "\nAdding max pooling layer: %d" % pool_size
@@ -56,9 +57,9 @@ class conv_RNN(Model):
         print("LSTM input shape", get_output_shape(l_prev))
         for n_hid in n_hidden:
             self.log += "\nAdding BLSTM layer with %d units" % n_hid
-            l_prev = LSTMLayer(
+            l_forward = LSTMLayer(
                 l_prev,
-                num_units=n_hid,
+                num_units=n_hid/2,
                 grad_clipping=grad_clip,
                 peepholes=peepholes,
                 ingate=Gate(
@@ -68,8 +69,30 @@ class conv_RNN(Model):
                 forgetgate=Gate(
                     b=lasagne.init.Constant(CONST_FORGET_B)
                 ),
-                nonlinearity=lasagne.nonlinearities.tanh)
+                nonlinearity=lasagne.nonlinearities.tanh
+            )
+            l_backward = LSTMLayer(
+                l_prev,
+                num_units=n_hid/2,
+                grad_clipping=grad_clip,
+                peepholes=peepholes,
+                ingate=Gate(
+                    W_in=lasagne.init.HeUniform(),
+                    W_hid=lasagne.init.HeUniform()
+                ),
+                forgetgate=Gate(
+                    b=lasagne.init.Constant(CONST_FORGET_B)
+                ),
+                nonlinearity=lasagne.nonlinearities.tanh,
+                backwards=True
+            )
             print("LSTM forward shape", get_output_shape(l_prev))
+
+            l_prev = ConcatLayer(
+                [l_forward, l_backward],
+                axis=2
+            )
+            print("LSTM concat shape", get_output_shape(l_prev))
 
         l_prev = ReshapeLayer(l_prev, (batch_size*factor, -1))
         # l_prev = DenseLayer(l_prev, num_units=512, nonlinearity=trans_func)
@@ -88,7 +111,7 @@ class conv_RNN(Model):
         self.sym_t = T.tensor3('t')
 
     def build_model(self, train_set, test_set, validation_set=None):
-        super(conv_RNN, self).build_model(train_set, test_set, validation_set)
+        super(conv_BRNN, self).build_model(train_set, test_set, validation_set)
 
         epsilon = 1e-8
         loss_cc = aggregate(categorical_crossentropy(
