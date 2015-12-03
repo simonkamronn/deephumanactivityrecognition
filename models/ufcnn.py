@@ -7,6 +7,7 @@ from lasagne.layers import get_output, get_output_shape, DenseLayer, InputLayer,
      get_all_params, Conv2DLayer, ConcatLayer, ReshapeLayer, DimshuffleLayer, DropoutLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
 from lasagne_extensions.updates import adam, rmsprop
+from lasagne import init
 import numpy as np
 
 
@@ -27,6 +28,12 @@ class UFCNN(Model):
         l3_mask = l3_mask[:, :, ::-1]
         self.l3_mask = theano.shared(l3_mask.astype(theano.config.floatX), broadcastable=(True, True, False, False))
 
+        W2 = init.GlorotNormal(gain=1.0).sample(shape=(n_filters, n_filters, filter_size*2+1, 1))
+        W2 *= l2_mask
+
+        W3 = init.GlorotNormal(gain=1.0).sample(shape=(n_filters, n_filters, filter_size*4+1, 1))
+        W3 *= l3_mask
+
         # Overwrite input layer
         sequence_length, n_features = n_in
         self.l_in = InputLayer(shape=(batch_size, sequence_length, n_features))
@@ -39,22 +46,23 @@ class UFCNN(Model):
         self.log += "\n%s:\t %s" % (l_h1.name, get_output_shape(l_h1))
 
         l_h2 = Conv2DLayer(l_h1, num_filters=n_filters, filter_size=(filter_size*2+1, 1),
-                           nonlinearity=self.transf, pad='same', name='h2')
+                           nonlinearity=self.transf, pad='same', name='h2', W=W2)
         self.log += "\n%s:\t %s" % (l_h2.name, get_output_shape(l_h2))
 
         l_h3 = Conv2DLayer(l_h2, num_filters=n_filters, filter_size=(filter_size*4+1, 1),
-                           nonlinearity=self.transf, pad='same', name='h3')
+                           nonlinearity=self.transf, pad='same', name='h3', W=W3)
         self.log += "\n%s:\t %s" % (l_h3.name, get_output_shape(l_h3))
 
         l_g3 = Conv2DLayer(l_h3, num_filters=n_filters, filter_size=(filter_size*4+1, 1),
-                           nonlinearity=self.transf, pad='same', name='g3')
+                           nonlinearity=self.transf, pad='same', name='g3', W=W3)
         self.log += "\n%s:\t %s" % (l_g3.name, get_output_shape(l_g3))
+        print(l_g3.W.get_value()[0, 0])
 
         l_h2_g3 = ConcatLayer((l_h2, l_g3), axis=1, name='l_h2_g3')
         self.log += "\n%s: %s" % (l_h2_g3.name, get_output_shape(l_h2_g3))
 
         l_g2 = Conv2DLayer(l_h2_g3, num_filters=n_filters, filter_size=(filter_size*2+1, 1),
-                           nonlinearity=self.transf, pad='same', name='g2')
+                           nonlinearity=self.transf, pad='same', name='g2', W=np.concatenate((W2, W2), axis=1))
         self.log += "\n%s:\t %s" % (l_g2.name, get_output_shape(l_g2))
 
         l_h1_g2 = ConcatLayer((l_h1, l_g2), axis=1, name='l_h1_g2')

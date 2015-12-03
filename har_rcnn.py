@@ -1,16 +1,14 @@
-import theano.sandbox.cuda
-theano.sandbox.cuda.use('gpu3')
 from models.rcnn import RCNN
 from training.train import TrainModel
-from lasagne.nonlinearities import rectify, softmax
+from lasagne.nonlinearities import rectify, softmax, leaky_rectify
 import load_data as ld
 
 
 def main():
-    add_pitch, add_roll = True, True
+    add_pitch, add_roll, add_filter = False, False, True
     batch_size = 128
-    train_set, test_set, valid_set, (sequence_length, n_features, n_classes) = \
-        ld.LoadHAR().uci_har_v1(add_pitch, add_roll)
+    (train_set, test_set, valid_set, (sequence_length, n_features, n_classes)), name = \
+        ld.LoadHAR().uci_hapt(add_pitch=add_pitch, add_roll=add_roll, add_filter=add_filter)
     n_train = train_set[0].shape[0]
     n_test = test_set[0].shape[0]
 
@@ -18,34 +16,43 @@ def main():
     n_test_batches = n_test//batch_size
     n_valid_batches = n_test//batch_size
 
+    print("n_train_batches: %d, n_test_batches: %d" % (n_train_batches, n_test_batches))
+
+    n_conv = 2
     model = RCNN(n_in=(sequence_length, n_features),
-                 n_filters=[],
-                 filter_sizes=[],
-                 pool_sizes=[],
-                 n_hidden=[],
+                 n_filters=[64]*n_conv,
+                 filter_sizes=[5]*n_conv,
+                 pool_sizes=[2]*n_conv,
+                 rcl=[3, 3, 3],
+                 rcl_dropout=0.5,
+                 n_hidden=[512, 512],
+                 dropout_probability=0.5,
                  n_out=n_classes,
-                 downsample=0,
+                 downsample=1,
                  ccf=False,
                  trans_func=rectify,
                  out_func=softmax,
                  batch_size=batch_size,
-                 dropout_probability=0)
+                 batch_norm=True)
 
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
                                                                                           test_set,
                                                                                           valid_set)
     train_args['inputs']['batchsize'] = batch_size
-    train_args['inputs']['learningrate'] = 0.001
-    train_args['inputs']['beta1'] = 0.8
-    train_args['inputs']['beta2'] = 0.999
+    train_args['inputs']['learningrate'] = 0.003
+    train_args['inputs']['beta1'] = 0.9
+    train_args['inputs']['beta2'] = 1e-6
 
     test_args['inputs']['batchsize'] = batch_size
     validate_args['inputs']['batchsize'] = batch_size
 
+    model.log += "\nDataset: %s" % name
     model.log += "\nAdd pitch: %s\nAdd roll: %s" % (add_pitch, add_roll)
+    model.log += "\nAdd filter separated signals: %s" % add_filter
+    model.log += "\nTransfer function: %s" % model.transf.__name__
     train = TrainModel(model=model,
-                       anneal_lr=1.,
-                       anneal_lr_freq=1.,
+                       anneal_lr=0.9,
+                       anneal_lr_freq=50,
                        output_freq=1,
                        pickle_f_custom_freq=100,
                        f_custom_eval=None)
@@ -57,7 +64,7 @@ def main():
                       n_train_batches=n_train_batches,
                       n_test_batches=n_test_batches,
                       n_valid_batches=n_valid_batches,
-                      n_epochs=1000)
+                      n_epochs=2000)
 
 if __name__ == "__main__":
     main()

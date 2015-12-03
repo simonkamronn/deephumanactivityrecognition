@@ -59,20 +59,21 @@ class RCNN(Model):
             l_prev = Conv2DLayer(l_prev,
                                  num_filters=n_filter,
                                  filter_size=(filter_size, 1),
+                                 pad="same",
                                  nonlinearity=None,
                                  b=None)
             l_prev = BatchNormalizeLayer(l_prev, normalize=batch_norm, nonlinearity=self.transf)
             if pool_size > 1:
                 self.log += "\nAdding max pooling layer: %d" % pool_size
                 l_prev = Pool2DLayer(l_prev, pool_size=(pool_size, 1))
-            self.log += "\nAdding dropout layer: %.2f" % 0.25
-            l_prev = DropoutLayer(l_prev, p=0.25)
+            self.log += "\nAdding dropout layer: %.2f" % rcl_dropout
+            l_prev = DropoutLayer(l_prev, p=rcl_dropout)
             print("Conv out shape", get_output_shape(l_prev))
 
         # Recurrent Convolutional layers
         filter_size = filter_sizes[0]
         for t in rcl:
-            self.log += "\nAdding recurrent conv layer with t=%d time steps and filter size: %s" % (t, filter_size)
+            self.log += "\nAdding recurrent conv layer: t: %d, filter size: %s" % (t, filter_size)
             l_prev = RecurrentConvLayer(l_prev,
                                         t=t,
                                         filter_size=filter_size,
@@ -85,19 +86,19 @@ class RCNN(Model):
                 l_prev = DropoutLayer(l_prev, p=rcl_dropout)
             print("RCL out shape", get_output_shape(l_prev))
 
-        # l_prev = FeaturePoolLayer(l_prev, pool_size=get_output_shape(l_prev)[2], axis=2)
-        # print("FeaturePoolLayer out shape", get_output_shape(l_prev))
+        l_prev = GlobalPoolLayer(l_prev)
+        print("GlobalPoolLayer out shape", get_output_shape(l_prev))
 
         for n_hid in n_hidden:
             self.log += "\nAdding dense layer with %d units" % n_hid
             print("Dense input shape", get_output_shape(l_prev))
             l_prev = DenseLayer(l_prev, num_units=n_hid, nonlinearity=None, b=None)
             l_prev = BatchNormalizeLayer(l_prev, normalize=batch_norm, nonlinearity=self.transf)
-        if dropout:
-            self.log += "\nAdding output dropout with probability %.2f" % dropout_probability
-            l_prev = DropoutLayer(l_prev, p=dropout_probability)
-        if batch_norm:
-            self.log += "\nUsing batch normalization"
+            if dropout:
+                self.log += "\nAdding output dropout with probability %.2f" % dropout_probability
+                l_prev = DropoutLayer(l_prev, p=dropout_probability)
+            if batch_norm:
+                self.log += "\nUsing batch normalization"
 
         self.model = DenseLayer(l_prev, num_units=n_out, nonlinearity=out_func)
         self.model_params = get_all_params(self.model)
@@ -123,7 +124,7 @@ class RCNN(Model):
         sym_beta2 = T.scalar('beta2')
         grads = T.grad(loss_cc, all_params)
         grads = [T.clip(g, -5, 5) for g in grads]
-        updates = adam(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
+        updates = rmsprop(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
 
         inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2]
         f_train = theano.function(

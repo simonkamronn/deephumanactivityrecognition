@@ -12,9 +12,9 @@ import glob as glob
 import numpy as np
 from scipy.io import loadmat
 from scipy import interpolate
-from sklearn.cross_validation import StratifiedShuffleSplit
+from sklearn.cross_validation import StratifiedShuffleSplit, KFold
 import itertools
-from har_utils import roll, pitch, expand_target
+from har_utils import roll, pitch, expand_target, split_signal
 
 # Path to HAR data
 if 'nt' in os.name:
@@ -27,21 +27,67 @@ class LoadHAR(object):
         self.root_folder = root_folder
         if root_folder is None:
             raise RuntimeError('Invalid folder')
+        self.name = ""
 
-    def uci_hapt(self, add_pitc=False, add_roll=False):
+    def uci_hapt(self, add_pitch=False, add_roll=False, expand=False, add_filter=False):
+        """
+        Sampling rate = 50
+        :param add_pitc:
+        :param add_roll:
+        :param expand:
+        :param add_filter:
+        :return:
+        """
+        self.name = "UCI HAPT"
         subfolder = 'UCI/HAPT Data Set/RawData/'
-        files = glob.glob(self.root_folder + subfolder + 'acc_*')
+        files = sorted(glob.glob(self.root_folder + subfolder + 'acc_*'))
+        labels = pd.read_csv(self.root_folder + subfolder +'/labels.txt',
+                             names=['exp', 'user', 'activity', 'start', 'end'],
+                             header=None, sep=' ')
+
+        n_samples=128
+        data_array = np.empty((0, n_samples, 3))
+        y = np.empty(0)
+        for exp, user in labels[['exp', 'user']].drop_duplicates().values:
+            print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
+            values = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ').values
+            idx = ((labels['exp']==exp) & (labels['user']==user))
+
+            for activity, start, end in labels[['activity', 'start', 'end']][idx].values:
+                segment = values[start:end]
+                segment = window_segment(segment, n_samples=n_samples)
+                data_array = np.concatenate((data_array, segment))
+                y = np.concatenate((y, [(activity-1)]*segment.shape[0]))
+        print('Data shape:', data_array.shape)
 
         data = dict()
-        for file in files:
-            pass
+        n_windows = y.shape[0]
+        train_index, test_index = slice(0, 0.8*n_windows), slice(0.8*n_windows+1, n_windows)
+        data['x_train'], data['x_test'] = data_array[train_index], data_array[test_index]
+        data['y_train'], data['y_test'] = one_hot(y[train_index].astype('int')), \
+                                          one_hot(y[test_index].astype('int'))
 
-    def uci_har_v1(self, add_pitch=False, add_roll=False, expand=False):
+        # for train_index, test_index in StratifiedShuffleSplit(y,
+        #                                                       n_iter=1,
+        #                                                       test_size=0.2,
+        #                                                       random_state=None):
+        #     data['x_train'], data['x_test'] = data_array[train_index], data_array[test_index]
+        #     data['y_train'], data['y_test'] = one_hot(y[train_index].astype('int')), \
+        #                                       one_hot(y[test_index].astype('int'))
+
+        enrich_fs = 0
+        if add_filter: enrich_fs = 50
+        data = add_features(data, normalise=True, ratio=1, add_roll=add_roll, add_pitch=add_pitch, expand=expand, enrich_fs=enrich_fs)
+
+        return return_tuple(data), self.name
+
+    def uci_har_v1(self, add_pitch=False, add_roll=False, expand=False, add_filter=False):
         """
         Data from Ortiz
         Sampling rate: 50hz
         :return:
         """
+        self.name = "UCI HAR V1"
         sub_folder = 'UCI/UCI HAR Dataset v1/'
         test_folder = self.root_folder + sub_folder + 'test/'
         train_folder = self.root_folder + sub_folder + 'train/'
@@ -75,18 +121,21 @@ class LoadHAR(object):
         data['x_test_features'] = pd.read_csv(test_folder + 'X_test.txt', sep=r'\s+', names=features)[features_filt].values
         data['x_train_features'] = pd.read_csv(train_folder + 'X_train.txt', sep=r'\s+', names=features)[features_filt].values
 
-        data = add_features(data, normalise=True, ratio=1, add_roll=add_roll, add_pitch=add_pitch, expand=expand)
+        enrich_fs = 0
+        if add_filter: enrich_fs = 50
+        data = add_features(data, normalise=True, ratio=1, add_roll=add_roll, add_pitch=add_pitch, expand=expand, enrich_fs=enrich_fs)
 
         # np.savez('data/uci_har_v1_theia.npz', x_train=data['x_train'], y_train=data['y_train'], x_test=data['x_test'], y_test=data['y_test'])
-        return return_tuple(data)
+        return return_tuple(data), self.name
 
-    def wisdm(self, add_pitch=False, add_roll=False, expand=False):
+    def wisdm(self, add_pitch=False, add_roll=False, expand=False, add_filter=False):
         """
         Sampling rate: 20hz
         User: 1-36
         Activity: Walking, jogging, sitting, standing, upstairs, downstairs
         :return: shared tuple of data
         """
+        self.name = "WISDM"
         sub_folder = 'WISDM Actitracker/Lab/'
         filename = 'WISDM_ar_v1.1_raw.txt'
         columns = ['user','activity','timestamp','x','y','z']
@@ -98,7 +147,7 @@ class LoadHAR(object):
         # Normalise data
         df_tmp = df[['x','y','z']]
         df_tmp = df_tmp - df_tmp.mean().mean()
-        df[['x','y','z']] = df_tmp / df_tmp.var().mean()
+        df[['x','y','z']] = df_tmp / df_tmp.std().mean()
 
         n_samples = 50
         tmp = np.empty((0, n_samples, 4))
@@ -116,10 +165,44 @@ class LoadHAR(object):
             data['y_train'], data['y_test'] = one_hot(tmp[train_index, 0, -1].astype('int')), \
                                               one_hot(tmp[test_index, 0, -1].astype('int'))
 
-        ratio = 1
-        data = add_features(data, False, ratio, add_roll, add_pitch, expand)
+        enrich_fs = 0
+        if add_filter: enrich_fs = 50
+        data = add_features(data, normalise=True, ratio=1, add_roll=add_roll, add_pitch=add_pitch, expand=expand, enrich_fs=enrich_fs)
 
-        return return_tuple(data)
+        return return_tuple(data), self.name
+
+    def lingacceleration(self):
+        """
+        Sampling rate: 76Hz
+        actlist.mat contains list of 20 activities
+        Data is stored as agg_s<subject no.>_<activity/obstacle>_<date>.mat in either
+        'activity'(lab) or 'obstacle'(natural)
+        actdata{i,j} contains acceleration samples for the activity label actlist{i} from the jth accelerometer source.
+        The indexing order of the sources is as follows:
+        j = 1 corresponds to data from the right hip,
+        2 is for data from the dominant wrist,
+        3 is for data from the non-dominant arm,
+        4 is for data from the dominant ankle,
+        5 is for data from the non-dominant thigh.
+
+        acttime{i,j} contains hoarder timestamps for actdata{i,j}.  There is one timestamp for every 100 samples of
+        accelerometer data.
+        celldata{j} contains raw acceleration data from accelerometer source j.
+        celltime{j} contains timestamps for celldata{j}.
+        acts(i) is the ith activity the subject performed in chronological order during the study.
+        times(i) specifies the index into celldata{j} of acts(i).  For example, accelerometer data from source j for
+        acts(1) corresponds to data from celldata{j}(times(1):times(2)-1).
+        freqs(j) contains the average sampling frequency of hoarder source j in Hz.
+        starttime contains the start time for the study.  The vector specifies the year, month, date, hour, minute,
+        and second in that order the subject began the study.
+        :return: tuple
+        """
+        RuntimeError('Only provides two axes')
+        sub_folder = 'mhealth/lingacceleration/'
+        activities = [a[0] for a in loadmat('actlist.mat')['actlist'][0]]
+
+        for mat_file in sorted(glob.glob(self.root_folder + sub_folder + 'dataset/activity/*.mat')):
+            pass
 
     def skoda(self):
         """
@@ -128,15 +211,18 @@ class LoadHAR(object):
         class number and instance number.
         output: 64x13
         """
+        RuntimeError('Not implemented')
         sub_folder = 'ETH/SkodaMiniCP/'
         data = loadmat(self.root_folder + sub_folder + 'right_classall_clean', squeeze_me=True)['right_classall_clean']
         return data
 
     def opportunity(self):
+        RuntimeError('Not implementet')
         sub_folder = 'UCI/Opportunity/dataset/'
         pass
 
-    def uci_mhealth(self):
+    def uci_mhealth(self, add_pitch=False, add_roll=False, expand=False):
+        self.name = "UCI mHealth"
         sub_folder = 'UCI/mHealth/'
 
         # Load the first subject and then the rest iteratively
@@ -166,18 +252,21 @@ class LoadHAR(object):
             data['x_train'], data['x_test'] = tmp_seg[train_index, :, :3], tmp_seg[test_index, :, :3]
             data['y_train'], data['y_test'] = one_hot(tmp_seg[train_index, 0, -1].astype('int')), \
                                               one_hot(tmp_seg[test_index, 0, -1].astype('int'))
-        return return_tuple(data)
 
-    def idash(self):
+        data = add_features(data, True, ratio, add_roll, add_pitch, expand)
+        return return_tuple(data), self.name
+
+    def idash(self, add_pitch=False, add_roll=False, expand=False):
         """
         This dataset contains motion sensor data of 16 physical activities
         (walking, jogging, stair climbing, etc.) collected on 16 adults using
         an iPod touch device (Apple Inc.). The data sampling rate was 30 Hz.
         The collection time for an activity varied from 20 seconds to 17 minutes.
         """
+        self.name = "IDASH"
         sub_folder = 'Physical Activity Sensor Data-Public/Public/iDASH_activity_dataset/'
         subjects = range(1, 17)
-        n_samples=60
+        n_samples = 60
         cols = [0, 1, 2]
         tmp_seg = np.empty((0, n_samples, len(cols)))
         target = []
@@ -199,9 +288,12 @@ class LoadHAR(object):
             data['x_train'], data['x_test'] = tmp_seg[train_index], tmp_seg[test_index]
             data['y_train'], data['y_test'] = one_hot(target[train_index].astype('int')), \
                                               one_hot(target[test_index].astype('int'))
-        return return_tuple(data)
+
+        data = add_features(data, True, 1, add_roll, add_pitch, expand, 30)
+        return return_tuple(data), self.name
 
     def pamap2(self):
+
         pass
 
     def mhealth_maninni(self):
@@ -209,9 +301,13 @@ class LoadHAR(object):
         Data from Stanford/MIT. Unfortunately they only provide a magnitude vector
         Subjects: 33
         """
+        RuntimeError('Only provides magnitude signal')
         sub_folder = 'mhealth/Mannini_Data_and_Code_PMC2015/Data/'
-        data = loadmat(sorted(glob.glob(self.root_folder + sub_folder + '*.mat'))[0])
+        file_name = 'StanfordDataset2010_adult_5sensors_win10000_corrected_classes1to3_apr2013_90Hz_filt_o4f20_recalib_PMC.mat'
+        data = loadmat(self.root_folder + sub_folder + file_name)
+        activities = data['FeatureNames']
         X = data['Data_m']
+
 
 def one_hot(labels, n_classes=None):
     """
@@ -250,12 +346,12 @@ def window_segment(data, n_samples = 64):
     data = np.reshape(data[:n_win*n_samples], (n_win, n_samples, n_dim))
     return data
 
-def add_features(data, normalise=True, ratio=0, add_roll=False, add_pitch=False, expand=False):
+def add_features(data, normalise=True, ratio=0, add_roll=False, add_pitch=False, expand=False, enrich_fs=0):
 
     if normalise:
         data_mean = np.mean((data['x_test'].mean(), data['x_train'].mean()))
-        data_var = np.mean((data['x_test'].var(), data['x_train'].var()))
-        print("Data mean: %f, Data variance: %f" % (data_mean, data_var))
+        data_std = np.mean((data['x_test'].std(), data['x_train'].std()))
+        print("Data mean: %f, Data std: %f" % (data_mean, data_std))
 
     for key in ['x_test', 'x_train']:
         n_win, n_samp, n_dim = data[key].shape
@@ -265,24 +361,26 @@ def add_features(data, normalise=True, ratio=0, add_roll=False, add_pitch=False,
 
         if normalise:
             # Data normalisation
-            print("Normalising data")
             data[key] = data[key] - data_mean
-            data[key] = data[key]/data_var
+            data[key] = data[key]/data_std
 
         # Add pitch and roll
         if add_pitch:
-            print("Adding pitch")
             pitches = []
             for i in range(n_win):
                 pitches.append(pitch(data[key][i]))
             data[key] = np.concatenate((data[key], pitches), axis=2)
 
         if add_roll:
-            print("Adding roll")
             rolls = []
             for i in range(n_win):
                 rolls.append(roll(data[key][i,:,:3]))
             data[key] = np.concatenate((data[key], rolls), axis=2)
+
+        if enrich_fs>0:
+            tmp_lp = split_signal(data[key][:,:,:3], enrich_fs)
+            tmp_hp = data[key][:,:,:3] - tmp_lp
+            data[key] = np.concatenate((data[key], tmp_lp, tmp_hp), axis=2)
 
     if expand:
         print("Expanding targets")

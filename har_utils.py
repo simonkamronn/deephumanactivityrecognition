@@ -1,7 +1,6 @@
-__author__ = 'Simon'
 import numpy as np
 from matplotlib.mlab import specgram
-
+from scipy.signal import butter, lfilter
 
 def roll(data):
     x, y, z = np.transpose(data)
@@ -75,3 +74,18 @@ def spectrogram_2d(data):
 # Expand the target to all time steps
 def expand_target(y, length):
     return np.rollaxis(np.tile(y, (length, 1, 1)), 1,)
+
+
+def split_signal(data, fs, cutoff=0.01, order=4):
+    n_win, n_samples, n_dim = data.shape
+    tmp = np.reshape(data, (n_win*n_samples, n_dim))
+    normal_cutoff = cutoff / (0.5 * fs)
+    b, a = butter(order, normal_cutoff, 'low', analog=False)
+    lp_sig = lfilter(b, a, tmp, axis=0).reshape(n_win, -1, n_dim)
+
+    return lp_sig
+
+
+def wavelet_decomp(data, level=3):
+    pass
+
