@@ -175,7 +175,7 @@ class LoadHAR(object):
 
         enrich_fs = 0
         if add_filter: enrich_fs = 50
-        data = add_features(data, normalise=True, ratio=1, add_roll=add_roll, add_pitch=add_pitch, expand=expand, enrich_fs=enrich_fs)
+        data = add_features_dict(data, normalise=True, ratio=1, add_roll=add_roll, add_pitch=add_pitch, expand=expand, enrich_fs=enrich_fs)
 
         # np.savez('data/uci_har_v1_theia.npz', x_train=data['x_train'], y_train=data['y_train'], x_test=data['x_test'], y_test=data['y_test'])
         return return_tuple(data, 6), self.name
@@ -434,6 +434,51 @@ def add_features(data, normalise=True, ratio=0, add_roll=False, add_pitch=False,
         data = np.concatenate((data, tmp_lp, tmp_hp), axis=2)
 
     return data
+
+def add_features_dict(data, normalise=True, ratio=0, add_roll=False, add_pitch=False, expand=False, enrich_fs=0):
+
+    if normalise:
+        # data_mag = np.mean((magnitude(data['x_test']), magnitude(data['x_train'])))
+        data_mean = np.mean((data['x_test'].mean(), data['x_train'].mean()))
+        data_std = np.mean((data['x_test'].reshape(-1, 3).std(axis=0), data['x_train'].reshape(-1, 3).std(axis=0)), axis=0)
+        print("Data mean: %f, Data std: %f" % (data_mean, data_std.mean()))
+
+    for key in ['x_test', 'x_train']:
+        n_win, n_samp, n_dim = data[key].shape
+        if ratio > 1:
+            data[key] = downsample(data[key].reshape(-1, n_dim), ratio=ratio).\
+                reshape(n_win, n_samp/ratio, n_dim)
+
+        if normalise:
+            # Data normalisation
+            data[key] = data[key] - data_mean
+            data[key] = data[key]/data_std
+
+        # Add pitch and roll
+        if add_pitch:
+            pitches = []
+            for i in range(n_win):
+                pitches.append(pitch(data[key][i]))
+            data[key] = np.concatenate((data[key], pitches), axis=2)
+
+        if add_roll:
+            rolls = []
+            for i in range(n_win):
+                rolls.append(roll(data[key][i,:,:3]))
+            data[key] = np.concatenate((data[key], rolls), axis=2)
+
+        if enrich_fs>0:
+            tmp_lp = split_signal(data[key][:,:,:3], enrich_fs)
+            tmp_hp = data[key][:,:,:3] - tmp_lp
+            data[key] = np.concatenate((data[key], tmp_lp, tmp_hp), axis=2)
+
+    if expand:
+        print("Expanding targets")
+        data['y_train'] = expand_target(data['y_train'], data['x_test'].shape[1])
+        data['y_test'] = expand_target(data['y_test'], data['x_test'].shape[1])
+
+    return data
+
 
 def shared_dataset(data_xy, borrow=False):
     x, y = data_xy
