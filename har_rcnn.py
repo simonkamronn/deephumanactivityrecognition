@@ -5,7 +5,7 @@ import load_data as ld
 
 
 def main():
-    add_pitch, add_roll, add_filter = False, False, True
+    add_pitch, add_roll, add_filter = True, True, True
     batch_size = 128
     (train_set, test_set, valid_set, (sequence_length, n_features, n_classes)), name = \
         ld.LoadHAR().uci_hapt(add_pitch=add_pitch, add_roll=add_roll, add_filter=add_filter)
@@ -18,14 +18,14 @@ def main():
 
     print("n_train_batches: %d, n_test_batches: %d" % (n_train_batches, n_test_batches))
 
-    n_conv = 2
+    n_conv = 1
     model = RCNN(n_in=(sequence_length, n_features),
                  n_filters=[64]*n_conv,
-                 filter_sizes=[5]*n_conv,
+                 filter_sizes=[3]*n_conv,
                  pool_sizes=[2]*n_conv,
-                 rcl=[3, 3, 3],
-                 rcl_dropout=0.5,
-                 n_hidden=[512, 512],
+                 rcl=[3, 3, 3, 3],
+                 rcl_dropout=0.3,
+                 n_hidden=[512],
                  dropout_probability=0.5,
                  n_out=n_classes,
                  downsample=1,
@@ -33,25 +33,27 @@ def main():
                  trans_func=rectify,
                  out_func=softmax,
                  batch_size=batch_size,
-                 batch_norm=True)
+                 batch_norm=False)
 
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
                                                                                           test_set,
                                                                                           valid_set)
     train_args['inputs']['batchsize'] = batch_size
-    train_args['inputs']['learningrate'] = 0.003
-    train_args['inputs']['beta1'] = 0.9
+    train_args['inputs']['learningrate'] = 0.004
+    train_args['inputs']['beta1'] = 0.95
     train_args['inputs']['beta2'] = 1e-6
 
     test_args['inputs']['batchsize'] = batch_size
     validate_args['inputs']['batchsize'] = batch_size
 
     model.log += "\nDataset: %s" % name
+    model.log += "\nTraining samples: %d" % n_train
+    model.log += "\nSequence length: %d" % sequence_length
     model.log += "\nAdd pitch: %s\nAdd roll: %s" % (add_pitch, add_roll)
     model.log += "\nAdd filter separated signals: %s" % add_filter
     model.log += "\nTransfer function: %s" % model.transf.__name__
     train = TrainModel(model=model,
-                       anneal_lr=0.9,
+                       anneal_lr=0.75,
                        anneal_lr_freq=50,
                        output_freq=1,
                        pickle_f_custom_freq=100,
