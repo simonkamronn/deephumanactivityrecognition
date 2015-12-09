@@ -14,7 +14,9 @@ from scipy.io import loadmat
 from scipy import interpolate
 from sklearn.cross_validation import StratifiedShuffleSplit, KFold
 import itertools
-from har_utils import roll, pitch, expand_target, split_signal
+from har_utils import roll, pitch, expand_target, split_signal, magnitude, rolling_window
+from sklearn import preprocessing
+import cPickle as pickle
 
 # Path to HAR data
 if 'nt' in os.name:
@@ -40,46 +42,96 @@ class LoadHAR(object):
         """
         self.name = "UCI HAPT"
         subfolder = 'UCI/HAPT Data Set/RawData/'
-        files = sorted(glob.glob(self.root_folder + subfolder + 'acc_*'))
-        labels = pd.read_csv(self.root_folder + subfolder +'/labels.txt',
-                             names=['exp', 'user', 'activity', 'start', 'end'],
-                             header=None, sep=' ')
+        data_file = self.root_folder+subfolder+'/data.npz'
 
-        n_samples=128
-        data_array = np.empty((0, n_samples, 3))
-        y = np.empty(0)
-        for exp, user in labels[['exp', 'user']].drop_duplicates().values:
-            print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
-            values = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ').values
-            idx = ((labels['exp']==exp) & (labels['user']==user))
+        if os.path.isfile(data_file):
+            data = pickle.load(open(data_file, 'r'))
+        else:
+            files = sorted(glob.glob(self.root_folder + subfolder + 'acc_*'))
+            labels = pd.read_csv(self.root_folder + subfolder +'/labels.txt',
+                                 names=['exp', 'user', 'activity', 'start', 'end'],
+                                 header=None, sep=' ')
 
-            for activity, start, end in labels[['activity', 'start', 'end']][idx].values:
-                segment = values[start:end]
-                segment = window_segment(segment, n_samples=n_samples)
-                data_array = np.concatenate((data_array, segment))
-                y = np.concatenate((y, [(activity-1)]*segment.shape[0]))
-        print('Data shape:', data_array.shape)
+            n_samples=200
+            step=200 # Using overlap for smooth transition between states
+            data_array = np.empty((0, n_samples, 3))
+            y = np.empty((0))
+            for exp, user in labels[['exp', 'user']].drop_duplicates().values:
+                print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
+                values = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ').values
+                idx = ((labels['exp']==exp) & (labels['user']==user))
 
-        data = dict()
-        n_windows = y.shape[0]
-        train_index, test_index = slice(0, 0.8*n_windows), slice(0.8*n_windows+1, n_windows)
-        data['x_train'], data['x_test'] = data_array[train_index], data_array[test_index]
-        data['y_train'], data['y_test'] = one_hot(y[train_index].astype('int')), \
-                                          one_hot(y[test_index].astype('int'))
+                for activity, start, end in labels[['activity', 'start', 'end']][idx].values:
+                    segment = values[start:end]
+                    # Pad a segment if it is smaller than windows size
+                    if segment.shape[0] < n_samples:
+                        segment = np.pad(segment, ((0, n_samples - segment.shape[0]), (0, 0)), 'edge')
+                    # segment = window_segment(segment, window=n_samples)
+                    segment = rolling_window(segment, (n_samples, 0), step).swapaxes(1, 2)
+                    data_array = np.concatenate((data_array, segment))
+                    y = np.concatenate((y, [(activity)]*segment.shape[0]))
+            # for exp, user in labels[['exp', 'user']].drop_duplicates().values:
+            #     print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
+            #     df = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ')
+            #     idx = ((labels['exp']==exp) & (labels['user']==user))
+            #
+            #     # Initialize activity column to zeros
+            #     df['activity'] = 0
+            #     for activity, start, end in labels[['activity', 'start', 'end']][idx].values:
+            #         df['activity'].loc[start:end] = activity
+            #
+            #     # Remove samples without label
+            #     df = df[df['activity'] != 0]
+            #
+            #     # Segment into windows with overlap
+            #     segmented = rolling_window(df.values, (n_samples, 0), step).swapaxes(1, 2)
+            #
+            #     # Find y label
+            #     t = []
+            #     for idx in range(segmented.shape[0]):
+            #         t.append(np.argmax(np.bincount(segmented[idx, :, -1].astype('int'))))
+            #
+            #     # Collect data
+            #     y = np.concatenate((y, t))
+            #     data_array = np.concatenate((data_array, segmented[:, :, :-1]))
+            print('Data shape:', data_array.shape)
+            print('Target shape:', y.shape)
+            print('Unique targets: %d' % np.count_nonzero(np.unique(y.flatten()).astype('int')))
 
-        # for train_index, test_index in StratifiedShuffleSplit(y,
-        #                                                       n_iter=1,
-        #                                                       test_size=0.2,
-        #                                                       random_state=None):
-        #     data['x_train'], data['x_test'] = data_array[train_index], data_array[test_index]
-        #     data['y_train'], data['y_test'] = one_hot(y[train_index].astype('int')), \
-        #                                       one_hot(y[test_index].astype('int'))
 
-        enrich_fs = 0
-        if add_filter: enrich_fs = 50
-        data = add_features(data, normalise=True, ratio=1, add_roll=add_roll, add_pitch=add_pitch, expand=expand, enrich_fs=enrich_fs)
+            if expand:
+                print("Expanding targets")
+                y = expand_target(y, data_array.shape[1])
 
-        return return_tuple(data), self.name
+            # Add features to data
+            enrich_fs = 0
+            if add_filter: enrich_fs = 50
+            data_array = add_features(data_array, normalise=False, add_roll=add_roll, add_pitch=add_pitch, expand=expand, enrich_fs=enrich_fs)
+
+            # Standardize data
+            n_windows, _, n_features = data_array.shape
+            data_array = preprocessing.scale(data_array.reshape((-1, n_features))).reshape((n_windows, n_samples, n_features))
+
+            # Partition data
+            data = dict()
+            # train_index, test_index = slice(0, np.ceil(0.8*n_windows).astype('int')), \
+            #                           slice(np.ceil(0.8*n_windows).astype('int')+1, n_windows)
+            # data['x_train'], data['x_test'] = data_array[train_index], data_array[test_index]
+            # data['y_train'], data['y_test'] = one_hot(y[train_index].astype('int') - 1), \
+            #                                   one_hot(y[test_index].astype('int') - 1)
+
+            for train_index, test_index in StratifiedShuffleSplit(y,
+                                                                  n_iter=1,
+                                                                  test_size=0.2,
+                                                                  random_state=None):
+                data['x_train'], data['x_test'] = data_array[train_index], data_array[test_index]
+                data['y_train'], data['y_test'] = one_hot(y[train_index].astype('int') - 1), \
+                                                  one_hot(y[test_index].astype('int') - 1)
+
+            # Save to disk
+            # pickle.dump(data, open(data_file,"w"))
+
+        return return_tuple(data, 12), self.name
 
     def uci_har_v1(self, add_pitch=False, add_roll=False, expand=False, add_filter=False):
         """
@@ -126,7 +178,7 @@ class LoadHAR(object):
         data = add_features(data, normalise=True, ratio=1, add_roll=add_roll, add_pitch=add_pitch, expand=expand, enrich_fs=enrich_fs)
 
         # np.savez('data/uci_har_v1_theia.npz', x_train=data['x_train'], y_train=data['y_train'], x_test=data['x_test'], y_test=data['y_test'])
-        return return_tuple(data), self.name
+        return return_tuple(data, 6), self.name
 
     def wisdm(self, add_pitch=False, add_roll=False, expand=False, add_filter=False):
         """
@@ -146,15 +198,14 @@ class LoadHAR(object):
 
         # Normalise data
         df_tmp = df[['x','y','z']]
-        df_tmp = df_tmp - df_tmp.mean().mean()
-        df[['x','y','z']] = df_tmp / df_tmp.std().mean()
+        df[['x','y','z']] = (df_tmp - df_tmp.mean().mean()) / df_tmp.std()
 
         n_samples = 50
         tmp = np.empty((0, n_samples, 4))
         for user in df['user'].unique():
             tmp = np.concatenate((tmp,
                                  window_segment(df[['x', 'y', 'z','activity']][df['user'] == user].values,
-                                                n_samples=n_samples)), axis=0)
+                                                window=n_samples)), axis=0)
 
         data = dict()
         for train_index, test_index in StratifiedShuffleSplit(tmp[:, 0, -1],
@@ -237,7 +288,7 @@ class LoadHAR(object):
         for idx in range(1,13):
             tmp2 = tmp[tmp[:, -1]==idx]
             tmp2 = downsample(tmp2, ratio=ratio)
-            tmp2 = window_segment(tmp2, n_samples=64)
+            tmp2 = window_segment(tmp2, window=64)
 
             if idx is 1:
                 tmp_seg = np.asarray(tmp2)
@@ -275,7 +326,7 @@ class LoadHAR(object):
             for idx, csv_file in enumerate(files):
                 if not "blank" in csv_file:
                     tmp = pd.read_csv(csv_file, sep=',', usecols=cols).values
-                    tmp = window_segment(tmp, n_samples=n_samples)
+                    tmp = window_segment(tmp, window=n_samples)
                     tmp_seg = np.vstack((tmp_seg, tmp))
                     target.append(np.ones((tmp.shape[0],), dtype=np.int)*idx)
         target = np.asarray(list(itertools.chain.from_iterable(target)))
@@ -339,53 +390,48 @@ def downsample(data, ratio=2):
     data = np.reshape(data[:n_resamp*ratio], (n_resamp, ratio, n_dim)).mean(axis=1)
     return data
 
-def window_segment(data, n_samples = 64):
+def window_segment(data, window = 64):
     # Segment in windows on axis 1
     n_samp, n_dim = data.shape
-    n_win = n_samp/n_samples
-    data = np.reshape(data[:n_win*n_samples], (n_win, n_samples, n_dim))
+    n_win = n_samp//(window)
+    data = np.reshape(data[:n_win * window], (n_win, window, n_dim))
     return data
 
 def add_features(data, normalise=True, ratio=0, add_roll=False, add_pitch=False, expand=False, enrich_fs=0):
 
     if normalise:
-        data_mean = np.mean((data['x_test'].mean(), data['x_train'].mean()))
-        data_std = np.mean((data['x_test'].std(), data['x_train'].std()))
-        print("Data mean: %f, Data std: %f" % (data_mean, data_std))
+        # data_mag = np.mean((magnitude(data['x_test']), magnitude(data['x_train'])))
+        data_mean = data.mean()
+        data_std = data.reshape(-1, 3).std(axis=0)
+        print("Data mean: %f, Data std: %f" % (data_mean, data_std.mean()))
 
-    for key in ['x_test', 'x_train']:
-        n_win, n_samp, n_dim = data[key].shape
-        if ratio > 1:
-            data[key] = downsample(data[key].reshape(-1, n_dim), ratio=ratio).\
-                reshape(n_win, n_samp/ratio, n_dim)
+    n_win, n_samp, n_dim = data.shape
+    if ratio > 1:
+        data = downsample(data.reshape(-1, n_dim), ratio=ratio).\
+            reshape(n_win, n_samp/ratio, n_dim)
 
-        if normalise:
-            # Data normalisation
-            data[key] = data[key] - data_mean
-            data[key] = data[key]/data_std
+    if normalise:
+        # Data normalisation
+        data = data - data_mean
+        data = data/data_std
 
-        # Add pitch and roll
-        if add_pitch:
-            pitches = []
-            for i in range(n_win):
-                pitches.append(pitch(data[key][i]))
-            data[key] = np.concatenate((data[key], pitches), axis=2)
+    # Add pitch and roll
+    if add_pitch:
+        pitches = []
+        for i in range(n_win):
+            pitches.append(pitch(data[i]))
+        data = np.concatenate((data, pitches), axis=2)
 
-        if add_roll:
-            rolls = []
-            for i in range(n_win):
-                rolls.append(roll(data[key][i,:,:3]))
-            data[key] = np.concatenate((data[key], rolls), axis=2)
+    if add_roll:
+        rolls = []
+        for i in range(n_win):
+            rolls.append(roll(data[i,:,:3]))
+        data = np.concatenate((data, rolls), axis=2)
 
-        if enrich_fs>0:
-            tmp_lp = split_signal(data[key][:,:,:3], enrich_fs)
-            tmp_hp = data[key][:,:,:3] - tmp_lp
-            data[key] = np.concatenate((data[key], tmp_lp, tmp_hp), axis=2)
-
-    if expand:
-        print("Expanding targets")
-        data['y_train'] = expand_target(data['y_train'], data['x_test'].shape[1])
-        data['y_test'] = expand_target(data['y_test'], data['x_test'].shape[1])
+    if enrich_fs>0:
+        tmp_lp = split_signal(data[:,:,:3], enrich_fs)
+        tmp_hp = data[:,:,:3] - tmp_lp
+        data = np.concatenate((data, tmp_lp, tmp_hp), axis=2)
 
     return data
 
@@ -395,9 +441,8 @@ def shared_dataset(data_xy, borrow=False):
     shared_y = theano.shared(np.asarray(y, dtype=theano.config.floatX), borrow=borrow)
     return shared_x, shared_y
 
-def return_tuple(data):
+def return_tuple(data, n_classes):
     n_train, sequence_length, n_features = data['x_train'].shape
-    n_classes = data['y_train'].shape[-1]
     print('Sequence: %d' % sequence_length)
     print('Features: %d' % n_features)
     print('Classes: %d' % n_classes)
