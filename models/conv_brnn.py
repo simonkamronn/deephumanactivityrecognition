@@ -50,6 +50,7 @@ class conv_BRNN(Model):
 
         # Reshape for LSTM
         batch_size /= factor
+        self.log += "\nGlobal Pooling: max"
         l_prev = GlobalPoolLayer(l_prev, pool_function=T.max)
         l_prev = ReshapeLayer(l_prev, (batch_size, factor, -1))
 

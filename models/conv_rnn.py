@@ -38,6 +38,7 @@ class conv_RNN(Model):
             l_prev = Conv2DLayer(l_prev,
                                  num_filters=n_filter,
                                  filter_size=(filter_size, 1),
+                                 pad='same',
                                  nonlinearity=self.transf)
             if pool_size > 1:
                 self.log += "\nAdding max pooling layer: %d" % pool_size
@@ -49,13 +50,14 @@ class conv_RNN(Model):
 
         # Reshape for LSTM
         batch_size /= factor
+        self.log += "\nGlobal Pooling: max"
         l_prev = GlobalPoolLayer(l_prev, pool_function=T.max)
         l_prev = ReshapeLayer(l_prev, (batch_size, factor, -1))
 
-        # Add BLSTM layers
+        # Add LSTM layers
         print("LSTM input shape", get_output_shape(l_prev))
         for n_hid in n_hidden:
-            self.log += "\nAdding BLSTM layer with %d units" % n_hid
+            self.log += "\nAdding LSTM layer with %d units" % n_hid
             l_prev = LSTMLayer(
                 l_prev,
                 num_units=n_hid,
@@ -69,8 +71,13 @@ class conv_RNN(Model):
                     b=lasagne.init.Constant(CONST_FORGET_B)
                 ),
                 nonlinearity=lasagne.nonlinearities.tanh)
-            print("LSTM forward shape", get_output_shape(l_prev))
+        print("LSTM output shape", get_output_shape(l_prev))
 
+        # Mean pooling layer
+        # self.log += "\nAdding mean global pooling"
+        # l_prev = FeaturePoolLayer(l_prev, pool_size=factor, axis=1, pool_function=T.mean)
+
+        # Reshape to process each timestep individually
         l_prev = ReshapeLayer(l_prev, (batch_size*factor, -1))
         # l_prev = DenseLayer(l_prev, num_units=512, nonlinearity=trans_func)
         # self.log += "\nAdding dense layer with %d units" % 512
@@ -79,6 +86,7 @@ class conv_RNN(Model):
             self.log += "\nAdding output dropout with probability %.2f" % dropout_probability
             l_prev = DropoutLayer(l_prev, p=dropout_probability)
 
+        # Output
         l_prev = DenseLayer(l_prev, num_units=n_out, nonlinearity=out_func)
         self.model = ReshapeLayer(l_prev, (batch_size, factor, n_out))
         print("Output shape", get_output_shape(self.model))

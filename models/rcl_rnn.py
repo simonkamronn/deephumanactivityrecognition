@@ -75,7 +75,7 @@ class RCL_RNN(Model):
         # Add BLSTM layers
         print("LSTM input shape", get_output_shape(l_prev))
         for n_hid in n_hidden:
-            self.log += "\nAdding BLSTM layer with %d units" % n_hid
+            self.log += "\nAdding LSTM layer with %d units" % n_hid
             l_prev = LSTMLayer(
                 l_prev,
                 num_units=n_hid,
@@ -172,14 +172,15 @@ class RCL_RNN(Model):
     def model_info(self):
         return self.log
 
+
 def RecurrentConvLayer(input_layer, t=3, num_filters=64, filter_size=7, nonlinearity=rectify, normalize=False):
     input_conv = Conv2DLayer(incoming=input_layer,
                              num_filters=num_filters,
                              filter_size=(1, 1),
                              stride=(1, 1),
                              pad='same',
-                             #W=lasagne.init.GlorotNormal(),
-                             W=lasagne.init.Normal(std=std),
+                             W=lasagne.init.GlorotNormal(),
+                             # W=lasagne.init.Normal(std=std),
                              nonlinearity=None,
                              b=None)
     l_prev = BatchNormalizeLayer(input_conv, normalize=normalize, nonlinearity=nonlinearity)
@@ -190,8 +191,8 @@ def RecurrentConvLayer(input_layer, t=3, num_filters=64, filter_size=7, nonlinea
                              filter_size=(filter_size, 1),
                              stride=(1, 1),
                              pad='same',
-                             #W=lasagne.init.GlorotNormal(),
-                             W=lasagne.init.Normal(std=std),
+                             W=lasagne.init.GlorotNormal(),
+                             # W=lasagne.init.Normal(std=std),
                              nonlinearity=None,
                              b=None)
         l_prev = ElemwiseSumLayer((input_conv, l_prev), coeffs=1)

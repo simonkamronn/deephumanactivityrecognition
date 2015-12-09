@@ -6,7 +6,7 @@ from base import Model
 from lasagne_extensions.nonlinearities import rectify, softmax, leaky_rectify, very_leaky_rectify
 from lasagne.layers import get_output, get_output_shape, DenseLayer, DropoutLayer, InputLayer, FeaturePoolLayer, \
     ReshapeLayer, DimshuffleLayer, get_all_params, ElemwiseSumLayer, Conv2DLayer, Pool2DLayer, NonlinearityLayer, \
-    BiasLayer, GlobalPoolLayer
+    BiasLayer, GlobalPoolLayer, GaussianNoiseLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
 # from lasagne.layers.dnn import Conv2DDNNLayer as
 # from lasagne.layers.dnn import Pool2DDNNLayer as
@@ -31,6 +31,11 @@ class RCNN(Model):
         sequence_length, n_features = n_in
         self.l_in = InputLayer(shape=(batch_size, sequence_length, n_features))
         l_prev = self.l_in
+
+        # Input noise
+        # sigma = 0.2
+        # self.log += "\nGaussian input noise: %02f" % sigma
+        # l_prev = GaussianNoiseLayer(l_prev, sigma=sigma)
 
         # Downsample input
         if downsample > 1:
