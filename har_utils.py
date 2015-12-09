@@ -2,6 +2,7 @@ import numpy as np
 from matplotlib.mlab import specgram
 from scipy.signal import butter, lfilter
 
+
 def roll(data):
     x, y, z = np.transpose(data)
     return np.arctan(y/np.sqrt(x**2 + z**2)).reshape((len(x), 1))
@@ -89,3 +90,25 @@ def split_signal(data, fs, cutoff=0.01, order=4):
 def wavelet_decomp(data, level=3):
     pass
 
+
+def rolling_window_lastaxis(a, window, step):
+    """Directly taken from Erik Rigtorp's post to numpy-discussion.
+    <http://www.mail-archive.com/numpy-discussion@scipy.org/msg29450.html>"""
+    if window < 1:
+       raise ValueError, "`window` must be at least 1."
+    if window > a.shape[-1]:
+       raise ValueError, "`window` is too long."
+    shape = a.shape[:-1] + ((a.shape[-1] - window + step)/step, window)
+    strides = a.strides[:-1] + (a.strides[-1]*step,) + (a.strides[-1],)
+    return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
+
+
+def rolling_window(a, window, step=1):
+    if not hasattr(window, '__iter__'):
+        return rolling_window_lastaxis(a, window, step)
+    for i, win in enumerate(window):
+        if win > 1:
+            a = a.swapaxes(i, -1)
+            a = rolling_window_lastaxis(a, win, step)
+            a = a.swapaxes(-2, i)
+    return a
