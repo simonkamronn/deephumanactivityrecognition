@@ -31,14 +31,16 @@ class LoadHAR(object):
             raise RuntimeError('Invalid folder')
         self.name = ""
 
-    def uci_hapt(self, add_pitch=False, add_roll=False, expand=False, add_filter=False):
+    def uci_hapt(self, add_pitch=False, add_roll=False, expand=False, add_filter=False, n_samples=200, step=200, shuffle=False):
         """
         Sampling rate = 50
         :param add_pitc:
         :param add_roll:
         :param expand:
         :param add_filter:
-        :return:
+        :param n_samples: number of samples in one window
+        :param step: step between windows. step < n_samples creates overlap
+        :return: dict of train, test data
         """
         self.name = "UCI HAPT"
         subfolder = 'UCI/HAPT Data Set/RawData/'
@@ -52,8 +54,8 @@ class LoadHAR(object):
                                  names=['exp', 'user', 'activity', 'start', 'end'],
                                  header=None, sep=' ')
 
-            n_samples=200
-            step=200 # Using overlap for smooth transition between states
+            # Extract signals from the files and split them into segments. UCI HAR V1 uses 128 window length with
+            # a step size of 64
             data_array = np.empty((0, n_samples, 3))
             y = np.empty((0))
             for exp, user in labels[['exp', 'user']].drop_duplicates().values:
@@ -112,18 +114,19 @@ class LoadHAR(object):
             n_windows, _, n_features = data_array.shape
             data_array = preprocessing.scale(data_array.reshape((-1, n_features))).reshape((n_windows, n_samples, n_features))
 
-            # Partition data
+            # Partition data. UCI HAR V1 uses 70/30 split
             data = dict()
-            # train_index, test_index = slice(0, np.ceil(0.8*n_windows).astype('int')), \
-            #                           slice(np.ceil(0.8*n_windows).astype('int')+1, n_windows)
-            # data['x_train'], data['x_test'] = data_array[train_index], data_array[test_index]
-            # data['y_train'], data['y_test'] = one_hot(y[train_index].astype('int') - 1), \
-            #                                   one_hot(y[test_index].astype('int') - 1)
-
-            for train_index, test_index in StratifiedShuffleSplit(y,
-                                                                  n_iter=1,
-                                                                  test_size=0.2,
-                                                                  random_state=None):
+            if shuffle:
+                for train_index, test_index in StratifiedShuffleSplit(y,
+                                                                      n_iter=1,
+                                                                      test_size=0.3,
+                                                                      random_state=None):
+                    data['x_train'], data['x_test'] = data_array[train_index], data_array[test_index]
+                    data['y_train'], data['y_test'] = one_hot(y[train_index].astype('int') - 1), \
+                                                      one_hot(y[test_index].astype('int') - 1)
+            else:
+                train_index, test_index = slice(0, np.ceil(0.7*n_windows).astype('int')), \
+                                          slice(np.ceil(0.7*n_windows).astype('int')+1, n_windows)
                 data['x_train'], data['x_test'] = data_array[train_index], data_array[test_index]
                 data['y_train'], data['y_test'] = one_hot(y[train_index].astype('int') - 1), \
                                                   one_hot(y[test_index].astype('int') - 1)
@@ -137,6 +140,8 @@ class LoadHAR(object):
         """
         Data from Ortiz
         Sampling rate: 50hz
+        Data is split into training and test as follows: "The obtained dataset has been randomly partitioned into
+        two sets, where 70% of the volunteers was selected for generating the training data and 30% the test data."
         :return:
         """
         self.name = "UCI HAR V1"
@@ -436,23 +441,14 @@ def add_features(data, normalise=True, ratio=0, add_roll=False, add_pitch=False,
     return data
 
 def add_features_dict(data, normalise=True, ratio=0, add_roll=False, add_pitch=False, expand=False, enrich_fs=0):
-
-    if normalise:
-        # data_mag = np.mean((magnitude(data['x_test']), magnitude(data['x_train'])))
-        data_mean = np.mean((data['x_test'].mean(), data['x_train'].mean()))
-        data_std = np.mean((data['x_test'].reshape(-1, 3).std(axis=0), data['x_train'].reshape(-1, 3).std(axis=0)), axis=0)
-        print("Data mean: %f, Data std: %f" % (data_mean, data_std.mean()))
-
+    """
+    Concatenate features on the last dimension
+    """
     for key in ['x_test', 'x_train']:
         n_win, n_samp, n_dim = data[key].shape
         if ratio > 1:
             data[key] = downsample(data[key].reshape(-1, n_dim), ratio=ratio).\
                 reshape(n_win, n_samp/ratio, n_dim)
-
-        if normalise:
-            # Data normalisation
-            data[key] = data[key] - data_mean
-            data[key] = data[key]/data_std
 
         # Add pitch and roll
         if add_pitch:
@@ -471,6 +467,20 @@ def add_features_dict(data, normalise=True, ratio=0, add_roll=False, add_pitch=F
             tmp_lp = split_signal(data[key][:,:,:3], enrich_fs)
             tmp_hp = data[key][:,:,:3] - tmp_lp
             data[key] = np.concatenate((data[key], tmp_lp, tmp_hp), axis=2)
+
+    if normalise:
+        n_dim = data['x_test'].shape[2]
+        # data_mag = np.mean((magnitude(data['x_test']), magnitude(data['x_train'])))
+        data_mean = np.mean((data['x_test'].mean(), data['x_train'].mean()))
+        data_std = np.mean((data['x_test'].reshape(-1, n_dim).std(axis=0),
+                            data['x_train'].reshape(-1, n_dim).std(axis=0)),
+                           axis=0)
+        print("Data mean: %f, Data std: %f" % (data_mean, data_std.mean()))
+
+        for key in ['x_test', 'x_train']:
+            # Data normalisation of each feature
+            data[key] = data[key] - data_mean
+            data[key] = data[key]/data_std
 
     if expand:
         print("Expanding targets")
