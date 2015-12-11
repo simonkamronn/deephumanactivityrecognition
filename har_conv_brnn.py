@@ -9,9 +9,12 @@ import numpy as np
 
 def main():
     add_pitch, add_roll, add_filter = True, True, True
+    step = 200
+    shuffle = True
     batch_size = 64
     (train_set, test_set, valid_set, (sequence_length, n_features, n_classes)), name = \
-        ld.LoadHAR().uci_hapt(add_pitch=add_pitch, add_roll=add_roll, add_filter=add_filter)
+        ld.LoadHAR().uci_hapt(add_pitch=add_pitch, add_roll=add_roll, add_filter=add_filter,
+                              n_samples=200, step=step, shuffle=shuffle)
 
     # The data is structured as (samples, sequence, features) but to properly use the convolutional RNN we need a longer
     # time
@@ -74,7 +77,11 @@ def main():
 
     model.log += "\nDataset: %s" % name
     model.log += "\nTraining samples: %d" % n_train
-    model.log += "\nSequence length: %d" % sequence_length
+    model.log += "\nTest samples: %d" % n_test
+    model.log += "\nSequence length: %d" % (sequence_length/factor)
+    model.log += "\nTime steps: %d" % factor
+    model.log += "\nStep: %d" % step
+    model.log += "\nShuffle %s" % shuffle
     model.log += "\nAdd pitch: %s\nAdd roll: %s" % (add_pitch, add_roll)
     model.log += "\nAdd filter separated signals: %s" % add_filter
     model.log += "\nTransfer function: %s" % model.transf

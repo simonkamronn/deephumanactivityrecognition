@@ -114,7 +114,8 @@ class LoadHAR(object):
             n_windows, _, n_features = data_array.shape
             data_array = preprocessing.scale(data_array.reshape((-1, n_features))).reshape((n_windows, n_samples, n_features))
 
-            # Partition data. UCI HAR V1 uses 70/30 split
+            # Partition data. UCI HAR V1 uses a random 70/30 split between subjects. Since the data is loaded
+            # sequentially with increasing subject ID, the non-shuffled partitioning must be similar.
             data = dict()
             if shuffle:
                 for train_index, test_index in StratifiedShuffleSplit(y,
