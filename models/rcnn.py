@@ -6,7 +6,7 @@ from base import Model
 from lasagne_extensions.nonlinearities import rectify, softmax, leaky_rectify, very_leaky_rectify
 from lasagne.layers import get_output, get_output_shape, DenseLayer, DropoutLayer, InputLayer, FeaturePoolLayer, \
     ReshapeLayer, DimshuffleLayer, get_all_params, ElemwiseSumLayer, Conv2DLayer, Pool2DLayer, NonlinearityLayer, \
-    BiasLayer, GlobalPoolLayer, GaussianNoiseLayer
+    BiasLayer, GlobalPoolLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
 # from lasagne.layers.dnn import Conv2DDNNLayer as
 # from lasagne.layers.dnn import Pool2DDNNLayer as
@@ -29,7 +29,7 @@ class RCNN(Model):
 
         # Overwrite input layer
         sequence_length, n_features = n_in
-        self.l_in = InputLayer(shape=(batch_size, sequence_length, n_features))
+        self.l_in = InputLayer(shape=(batch_size, sequence_length, n_features), name='Input')
         l_prev = self.l_in
 
         # Input noise
@@ -40,25 +40,26 @@ class RCNN(Model):
         # Downsample input
         if downsample > 1:
             self.log += "\nDownsampling with a factor of %d" % downsample
-            l_prev = FeaturePoolLayer(l_prev, pool_size=downsample, pool_function=T.mean)
+            l_prev = FeaturePoolLayer(l_prev, pool_size=downsample, pool_function=T.mean, name="Downsample")
             sequence_length /= downsample
 
         if ccf:
             self.log += "\nAdding cross-channel feature layer"
-            l_prev = ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
+            l_prev = ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features), name='Reshape')
             l_prev = Conv2DLayer(l_prev,
                                  num_filters=4*n_features,
                                  filter_size=(1, n_features),
                                  nonlinearity=None,
-                                 b=None)
+                                 b=None,
+                                 name='Conv2D')
             l_prev = BatchNormalizeLayer(l_prev, normalize=batch_norm, nonlinearity=self.transf)
             n_features *= 4
-            l_prev = ReshapeLayer(l_prev, (batch_size, n_features, sequence_length))
-            l_prev = DimshuffleLayer(l_prev, (0, 2, 1))
+            l_prev = ReshapeLayer(l_prev, (batch_size, n_features, sequence_length), name='Reshape')
+            l_prev = DimshuffleLayer(l_prev, (0, 2, 1), name='Dimshuffle')
 
         # Convolutional layers
-        l_prev = ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
-        l_prev = DimshuffleLayer(l_prev, (0, 3, 2, 1))
+        l_prev = ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features), name='Reshape')
+        l_prev = DimshuffleLayer(l_prev, (0, 3, 2, 1), name='Dimshuffle')
         for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
             self.log += "\nAdding 2D conv layer: %d x %d" % (n_filter, filter_size)
             l_prev = Conv2DLayer(l_prev,
@@ -66,13 +67,14 @@ class RCNN(Model):
                                  filter_size=(filter_size, 1),
                                  pad="same",
                                  nonlinearity=None,
-                                 b=None)
+                                 b=None,
+                                 name='Conv2D')
             l_prev = BatchNormalizeLayer(l_prev, normalize=batch_norm, nonlinearity=self.transf)
             if pool_size > 1:
                 self.log += "\nAdding max pooling layer: %d" % pool_size
-                l_prev = Pool2DLayer(l_prev, pool_size=(pool_size, 1))
+                l_prev = Pool2DLayer(l_prev, pool_size=(pool_size, 1), name='Max Pool')
             self.log += "\nAdding dropout layer: %.2f" % rcl_dropout
-            l_prev = DropoutLayer(l_prev, p=rcl_dropout)
+            l_prev = DropoutLayer(l_prev, p=rcl_dropout, name='Dropout')
             print("Conv out shape", get_output_shape(l_prev))
 
         # Recurrent Convolutional layers
@@ -85,27 +87,27 @@ class RCNN(Model):
                                         nonlinearity=self.transf,
                                         normalize=batch_norm)
             self.log += "\nAdding max pool layer: 2"
-            l_prev = Pool2DLayer(l_prev, pool_size=(2, 1))
-            if rcl_dropout > 0.0:
-                self.log += "\nAdding dropout layer: %.2f" % rcl_dropout
-                l_prev = DropoutLayer(l_prev, p=rcl_dropout)
+            l_prev = Pool2DLayer(l_prev, pool_size=(2, 1), name='Max Pool')
+            # if rcl_dropout > 0.0:
+            #     self.log += "\nAdding dropout layer: %.2f" % rcl_dropout
+            #     l_prev = DropoutLayer(l_prev, p=rcl_dropout, name='Dropout')
             print("RCL out shape", get_output_shape(l_prev))
 
-        l_prev = GlobalPoolLayer(l_prev)
+        l_prev = GlobalPoolLayer(l_prev, name='Global Max Pool')
         print("GlobalPoolLayer out shape", get_output_shape(l_prev))
 
         for n_hid in n_hidden:
             self.log += "\nAdding dense layer with %d units" % n_hid
             print("Dense input shape", get_output_shape(l_prev))
-            l_prev = DenseLayer(l_prev, num_units=n_hid, nonlinearity=None, b=None)
+            l_prev = DenseLayer(l_prev, num_units=n_hid, nonlinearity=None, b=None, name='Dense')
             l_prev = BatchNormalizeLayer(l_prev, normalize=batch_norm, nonlinearity=self.transf)
             if dropout:
                 self.log += "\nAdding output dropout with probability %.2f" % dropout_probability
-                l_prev = DropoutLayer(l_prev, p=dropout_probability)
+                l_prev = DropoutLayer(l_prev, p=dropout_probability, name='Dropout')
             if batch_norm:
                 self.log += "\nUsing batch normalization"
 
-        self.model = DenseLayer(l_prev, num_units=n_out, nonlinearity=out_func)
+        self.model = DenseLayer(l_prev, num_units=n_out, nonlinearity=out_func, name='Output')
         self.model_params = get_all_params(self.model)
 
         self.sym_x = T.tensor3('x')
@@ -177,7 +179,7 @@ class RCNN(Model):
         return self.log
 
 
-def RecurrentConvLayer(input_layer, t=3, num_filters=64, filter_size=7, nonlinearity=leaky_rectify, normalize=False):
+def RecurrentConvLayer(input_layer, t=3, num_filters=64, filter_size=7, nonlinearity=leaky_rectify, normalize=False, rcl_dropout=0.0):
     input_conv = Conv2DLayer(incoming=input_layer,
                              num_filters=num_filters,
                              filter_size=(1, 1),
@@ -186,8 +188,10 @@ def RecurrentConvLayer(input_layer, t=3, num_filters=64, filter_size=7, nonlinea
                              #W=lasagne.init.GlorotNormal(),
                              W=lasagne.init.Normal(std=std),
                              nonlinearity=None,
-                             b=None)
+                             b=None,
+                             name='RCL Conv2D input')
     l_prev = BatchNormalizeLayer(input_conv, normalize=normalize, nonlinearity=nonlinearity)
+    l_prev = DropoutLayer(l_prev, p=rcl_dropout, name='Recurrent conv dropout')
 
     for _ in range(t):
         l_prev = Conv2DLayer(incoming=l_prev,
@@ -198,19 +202,21 @@ def RecurrentConvLayer(input_layer, t=3, num_filters=64, filter_size=7, nonlinea
                              #W=lasagne.init.GlorotNormal(),
                              W=lasagne.init.Normal(std=std),
                              nonlinearity=None,
-                             b=None)
-        l_prev = ElemwiseSumLayer((input_conv, l_prev), coeffs=1)
+                             b=None,
+                             name='Conv2D t=%d' % _)
+        l_prev = ElemwiseSumLayer((input_conv, l_prev), coeffs=1, name='Sum')
         l_prev = BatchNormalizeLayer(l_prev, normalize=normalize, nonlinearity=nonlinearity)
+        l_prev = DropoutLayer(l_prev, p=rcl_dropout, name='Recurrent conv dropout')
     return l_prev
 
 
-def BatchNormalizeLayer(l_prev, normalize=False, nonlinearity=leaky_rectify):
+def BatchNormalizeLayer(l_prev, normalize=False, nonlinearity=rectify):
     if normalize:
         # l_prev = NormalizeLayer(l_prev, alpha='single_pass')
         # l_prev = ScaleAndShiftLayer(l_prev)
         # l_prev = NonlinearityLayer(l_prev, nonlinearity=nonlinearity)
-        l_prev = BatchNormLayer(l_prev, nonlinearity=nonlinearity)
+        l_prev = BatchNormLayer(l_prev, nonlinearity=nonlinearity, name='Batch norm')
     else:
-        l_prev = NonlinearityLayer(l_prev, nonlinearity=nonlinearity)
-        l_prev = BiasLayer(l_prev)
+        l_prev = NonlinearityLayer(l_prev, nonlinearity=nonlinearity, name='Non-linearity')
+        l_prev = BiasLayer(l_prev, name='Bias')
     return l_prev
