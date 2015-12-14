@@ -1,12 +1,13 @@
 from models.rcnn import RCNN
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify
+from lasagne.layers import get_all_layers, get_output_shape
 import load_data as ld
 
 
 def main():
     add_pitch, add_roll, add_filter = True, True, True
-    n_samples, step = 200, 200
+    n_samples, step = 200, 100
     shuffle = True
     batch_size = 64
     (train_set, test_set, valid_set, (sequence_length, n_features, n_classes)), name = \
@@ -26,9 +27,9 @@ def main():
                  n_filters=[64]*n_conv,
                  filter_sizes=[3]*n_conv,
                  pool_sizes=[2]*n_conv,
-                 rcl=[3, 3, 3, 3, 3],
-                 rcl_dropout=0.4,
-                 n_hidden=[256],
+                 rcl=[1, 2, 3, 4],
+                 rcl_dropout=0.5,
+                 n_hidden=[512],
                  dropout_probability=0.5,
                  n_out=n_classes,
                  downsample=1,
@@ -42,8 +43,8 @@ def main():
                                                                                           test_set,
                                                                                           valid_set)
     train_args['inputs']['batchsize'] = batch_size
-    train_args['inputs']['learningrate'] = 0.004
-    train_args['inputs']['beta1'] = 0.95
+    train_args['inputs']['learningrate'] = 0.003
+    train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 1e-6
 
     test_args['inputs']['batchsize'] = batch_size
@@ -58,6 +59,11 @@ def main():
     model.log += "\nAdd pitch: %s\nAdd roll: %s" % (add_pitch, add_roll)
     model.log += "\nAdd filter separated signals: %s" % add_filter
     model.log += "\nTransfer function: %s" % model.transf
+    model.log += "\nNetwork Architecture ---------------"
+    for layer in get_all_layers(model.model):
+        # print(layer.name, ": ", get_output_shape(layer))
+        model.log += "\n" + layer.name + ": " + str(get_output_shape(layer))
+
     train = TrainModel(model=model,
                        anneal_lr=0.75,
                        anneal_lr_freq=50,
@@ -72,7 +78,7 @@ def main():
                       n_train_batches=n_train_batches,
                       n_test_batches=n_test_batches,
                       n_valid_batches=n_valid_batches,
-                      n_epochs=2000)
+                      n_epochs=1000)
 
 if __name__ == "__main__":
     main()
