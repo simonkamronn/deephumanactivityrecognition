@@ -41,7 +41,7 @@ for model in df['name'].unique():
             if file.endswith('log'):
                 best_model_log = os.path.join(model_directory, model_dir, file)
 
-        print("%04f\t%s" % (accuracy, model_dir))
+        print("%.4f\t%s" % (accuracy, model_dir))
 
         # log = ""
         # with open(best_model_log, 'r') as f:

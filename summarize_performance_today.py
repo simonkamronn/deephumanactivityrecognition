@@ -31,6 +31,7 @@ for sub_dir in sub_dirs:
 
 df = pd.DataFrame(data=np.transpose([model_ids, model_names, model_accuracy, model_dirs]),
                   columns=['id', 'name', 'accuracy', 'dir'])
+df = df.convert_objects(convert_numeric=True)
 df = df.sort_values(by='accuracy', ascending=False)
 
 for model in df['name'].unique():
@@ -41,13 +42,13 @@ for model in df['name'].unique():
             if file.endswith('log'):
                 best_model_log = os.path.join(model_directory, model_dir, file)
 
-        print("%s\t%s" % (accuracy, model_dir))
+        print("%.4f\t%s" % (accuracy, model_dir))
 
-        log = ""
-        with open(best_model_log, 'r') as f:
-            for line in f:
-                if 'TRAINING MODEL' in line:
-                    break
-                log += line
-        #print(log)
+        # log = ""
+        # with open(best_model_log, 'r') as f:
+        #     for line in f:
+        #         if 'TRAINING MODEL' in line:
+        #             break
+        #         log += line
+        # print(log)
 
