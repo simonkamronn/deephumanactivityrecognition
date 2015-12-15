@@ -100,7 +100,6 @@ class LoadHAR(object):
             print('Target shape:', y.shape)
             print('Unique targets: %d' % np.count_nonzero(np.unique(y.flatten()).astype('int')))
 
-
             if expand:
                 print("Expanding targets")
                 y = expand_target(y, data_array.shape[1])
@@ -137,7 +136,7 @@ class LoadHAR(object):
 
         return return_tuple(data, 12), self.name
 
-    def uci_har_v1(self, add_pitch=False, add_roll=False, expand=False, add_filter=False):
+    def uci_har_v1(self, add_pitch=False, add_roll=False, expand=False, add_filter=False, n_samples=200, step=200, shuffle=False):
         """
         Data from Ortiz
         Sampling rate: 50hz
@@ -182,6 +181,16 @@ class LoadHAR(object):
         enrich_fs = 0
         if add_filter: enrich_fs = 50
         data = add_features_dict(data, normalise=True, ratio=1, add_roll=add_roll, add_pitch=add_pitch, expand=expand, enrich_fs=enrich_fs)
+
+        if shuffle:
+            data_array = np.concatenate((data['x_train'], data['x_test']), axis=0)
+            y = np.concatenate((data['y_train'], data['y_test']), axis=0)
+            for train_index, test_index in StratifiedShuffleSplit(np.argmax(y, axis=1),
+                                                                  n_iter=1,
+                                                                  test_size=0.3,
+                                                                  random_state=None):
+                data['x_train'], data['x_test'] = data_array[train_index], data_array[test_index]
+                data['y_train'], data['y_test'] = y[train_index], y[test_index]
 
         # np.savez('data/uci_har_v1_theia.npz', x_train=data['x_train'], y_train=data['y_train'], x_test=data['x_test'], y_test=data['y_test'])
         return return_tuple(data, 6), self.name
@@ -470,18 +479,25 @@ def add_features_dict(data, normalise=True, ratio=0, add_roll=False, add_pitch=F
             data[key] = np.concatenate((data[key], tmp_lp, tmp_hp), axis=2)
 
     if normalise:
-        n_dim = data['x_test'].shape[2]
-        # data_mag = np.mean((magnitude(data['x_test']), magnitude(data['x_train'])))
-        data_mean = np.mean((data['x_test'].mean(), data['x_train'].mean()))
-        data_std = np.mean((data['x_test'].reshape(-1, n_dim).std(axis=0),
-                            data['x_train'].reshape(-1, n_dim).std(axis=0)),
-                           axis=0)
-        print("Data mean: %f, Data std: %f" % (data_mean, data_std.mean()))
+        # n_dim = data['x_test'].shape[2]
+        # # data_mag = np.mean((magnitude(data['x_test']), magnitude(data['x_train'])))
+        # data_mean = np.mean((data['x_test'].mean(), data['x_train'].mean()))
+        # data_std = np.mean((data['x_test'].reshape(-1, n_dim).std(axis=0),
+        #                     data['x_train'].reshape(-1, n_dim).std(axis=0)),
+        #                    axis=0)
+        # print("Data mean: %f, Data std: %f" % (data_mean, data_std.mean()))
+        #
+        # for key in ['x_test', 'x_train']:
+        #     # Data normalisation of each feature
+        #     data[key] = data[key] - data_mean
+        #     data[key] = data[key]/data_std
 
-        for key in ['x_test', 'x_train']:
-            # Data normalisation of each feature
-            data[key] = data[key] - data_mean
-            data[key] = data[key]/data_std
+        # Standardize data
+        n_windows, n_samples, n_features = data['x_train'].shape
+        data_array = preprocessing.scale(np.concatenate((data['x_train'], data['x_test']), axis=0)
+                                         .reshape((-1, n_features))).reshape((-1, n_samples, n_features))
+        data['x_train'] = data_array[:n_windows]
+        data['x_test'] = data_array[n_windows:]
 
     if expand:
         print("Expanding targets")
