@@ -58,6 +58,7 @@ class LoadHAR(object):
             # a step size of 64
             data_array = np.empty((0, n_samples, 3))
             y = np.empty((0))
+            users = np.empty((0))
             for exp, user in labels[['exp', 'user']].drop_duplicates().values:
                 print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
                 values = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ').values
@@ -65,13 +66,17 @@ class LoadHAR(object):
 
                 for activity, start, end in labels[['activity', 'start', 'end']][idx].values:
                     segment = values[start:end]
-                    # Pad a segment if it is smaller than windows size
-                    if segment.shape[0] < n_samples:
-                        segment = np.pad(segment, ((0, n_samples - segment.shape[0]), (0, 0)), 'edge')
+                    # Pad a segment to a multiple of n_samples
+                    pad_width = int(np.ceil(segment.shape[0]/float(n_samples))*n_samples - segment.shape[0])
+                    segment = np.pad(segment, ((0, pad_width), (0, 0)), 'edge')
+
                     # segment = window_segment(segment, window=n_samples)
                     segment = rolling_window(segment, (n_samples, 0), step).swapaxes(1, 2)
+
+                    # Collect data
                     data_array = np.concatenate((data_array, segment))
                     y = np.concatenate((y, [(activity)]*segment.shape[0]))
+                    users = np.concatenate((users, [(user)]*segment.shape[0]))
             # for exp, user in labels[['exp', 'user']].drop_duplicates().values:
             #     print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
             #     df = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ')
@@ -113,20 +118,19 @@ class LoadHAR(object):
             n_windows, _, n_features = data_array.shape
             data_array = preprocessing.scale(data_array.reshape((-1, n_features))).reshape((n_windows, n_samples, n_features))
 
-            # Partition data. UCI HAR V1 uses a random 70/30 split between subjects. Since the data is loaded
-            # sequentially with increasing subject ID, the non-shuffled partitioning must be similar.
+            # Partition data. UCI HAR V1 uses a leave-one-subject-out cross validation.
             data = dict()
             if shuffle:
                 for train_index, test_index in StratifiedShuffleSplit(y,
                                                                       n_iter=1,
-                                                                      test_size=0.3,
+                                                                      test_size=0.2,
                                                                       random_state=None):
                     data['x_train'], data['x_test'] = data_array[train_index], data_array[test_index]
                     data['y_train'], data['y_test'] = one_hot(y[train_index].astype('int') - 1), \
                                                       one_hot(y[test_index].astype('int') - 1)
             else:
-                train_index, test_index = slice(0, np.ceil(0.7*n_windows).astype('int')), \
-                                          slice(np.ceil(0.7*n_windows).astype('int')+1, n_windows)
+                train_index, test_index = slice(0, np.ceil(0.8*n_windows).astype('int')), \
+                                          slice(np.ceil(0.8*n_windows).astype('int'), n_windows)
                 data['x_train'], data['x_test'] = data_array[train_index], data_array[test_index]
                 data['y_train'], data['y_test'] = one_hot(y[train_index].astype('int') - 1), \
                                                   one_hot(y[test_index].astype('int') - 1)
@@ -134,7 +138,7 @@ class LoadHAR(object):
             # Save to disk
             # pickle.dump(data, open(data_file,"w"))
 
-        return return_tuple(data, 12), self.name
+        return return_tuple(data, 12), self.name, users
 
     def uci_har_v1(self, add_pitch=False, add_roll=False, expand=False, add_filter=False, n_samples=200, step=200, shuffle=False):
         """
@@ -414,23 +418,11 @@ def window_segment(data, window = 64):
 
 def add_features(data, normalise=True, ratio=0, add_roll=False, add_pitch=False, expand=False, enrich_fs=0):
 
-    if normalise:
-        # data_mag = np.mean((magnitude(data['x_test']), magnitude(data['x_train'])))
-        data_mean = data.mean()
-        data_std = data.reshape(-1, 3).std(axis=0)
-        print("Data mean: %f, Data std: %f" % (data_mean, data_std.mean()))
-
     n_win, n_samp, n_dim = data.shape
     if ratio > 1:
         data = downsample(data.reshape(-1, n_dim), ratio=ratio).\
             reshape(n_win, n_samp/ratio, n_dim)
 
-    if normalise:
-        # Data normalisation
-        data = data - data_mean
-        data = data/data_std
-
-    # Add pitch and roll
     if add_pitch:
         pitches = []
         for i in range(n_win):
@@ -447,6 +439,11 @@ def add_features(data, normalise=True, ratio=0, add_roll=False, add_pitch=False,
         tmp_lp = split_signal(data[:,:,:3], enrich_fs)
         tmp_hp = data[:,:,:3] - tmp_lp
         data = np.concatenate((data, tmp_lp, tmp_hp), axis=2)
+
+    if normalise:
+        # Standardize data
+        n_windows, n_samples, n_features = data.shape
+        data = preprocessing.scale(data.reshape((-1, n_features))).reshape((n_windows, n_samples, n_features))
 
     return data
 
