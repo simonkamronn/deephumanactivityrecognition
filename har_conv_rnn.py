@@ -1,16 +1,21 @@
+import theano.sandbox.cuda
+theano.sandbox.cuda.use('gpu0')
+
 from models.conv_rnn import conv_RNN
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify
 import load_data as ld
 import numpy as np
 from sklearn.cross_validation import LeaveOneLabelOut
+from utils import env_paths as paths
+import cPickle as pkl
 
 
 def main():
     add_pitch, add_roll, add_filter = True, True, True
     n_samples, step = 200, 50
     shuffle = False
-    batch_size = 32
+    batch_size = 64
     (train_set, test_set, valid_set, (sequence_length, n_features, n_classes)), name, users = \
         ld.LoadHAR().uci_hapt(add_pitch=add_pitch, add_roll=add_roll, add_filter=add_filter,
                               n_samples=n_samples, step=step, shuffle=shuffle)
@@ -30,8 +35,8 @@ def main():
                      filter_sizes=[3]*n_conv,
                      pool_sizes=[2]*n_conv,
                      n_hidden=[100],
-                     conv_dropout=0.0,
-                     dropout_probability=0.0,
+                     conv_dropout=0.1,
+                     dropout_probability=0.5,
                      n_out=n_classes,
                      downsample=1,
                      trans_func=rectify,
@@ -42,7 +47,7 @@ def main():
 
     lol = LeaveOneLabelOut(users)
     user = 0
-    eval_validation = []
+    eval_validation = np.empty((0, 2))
     for train_index, test_index in lol:
         user += 1
         X_train, X_test = X[train_index], X[test_index]
@@ -60,7 +65,6 @@ def main():
         print("Resizing test set from %d to %d" % (test_set[0].shape[0], n_test*factor))
         test_set = (np.reshape(test_set[0][:factor*n_test], (n_test, sequence_length, n_features)),
                     np.reshape(test_set[1][:factor*n_test], (n_test, factor, n_classes)))
-
         valid_set = test_set
 
         n_train = train_set[0].shape[0]
@@ -111,10 +115,10 @@ def main():
                           n_train_batches=n_train_batches,
                           n_test_batches=n_test_batches,
                           n_valid_batches=n_valid_batches,
-                          n_epochs=500)
+                          n_epochs=2)
 
         # Collect
-        eval_validation.append(np.max(train.eval_validation, axis=0))
+        eval_validation = np.concatenate((eval_validation, np.max(train.eval_validation.values(), axis=0).reshape(1, 2)), axis=0)
         print(eval_validation)
 
         # Reset logging
@@ -124,6 +128,10 @@ def main():
             train.logger.removeHandler(handler)
         del train.logger
 
+    cv_eval = paths.get_plot_evaluation_path_for_model(model.get_root_path(), "_cv.pkl")
+    pkl.dump(eval_validation, open(cv_eval, "wb"))
+
+    return model
 
 if __name__ == "__main__":
     main()

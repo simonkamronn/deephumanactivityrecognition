@@ -4,7 +4,8 @@ from lasagne.nonlinearities import rectify, softmax, leaky_rectify
 import load_data as ld
 import numpy as np
 from sklearn.cross_validation import LeaveOneLabelOut
-
+from utils import env_paths as paths
+import cPickle as pkl
 
 def main():
     add_pitch, add_roll, add_filter = True, True, True
@@ -42,7 +43,7 @@ def main():
 
     lol = LeaveOneLabelOut(users)
     user = 0
-    eval_validation = []
+    eval_validation = np.empty((0, 2))
     for train_index, test_index in lol:
         user += 1
         X_train, X_test = X[train_index], X[test_index]
@@ -50,7 +51,6 @@ def main():
 
         train_set = (X_train, y_train)
         test_set = (X_test, y_test)
-
 
         n_train = train_set[0].shape[0]//factor
         print("Resizing train set from %d to %d" % (train_set[0].shape[0], n_train*factor))
@@ -113,7 +113,7 @@ def main():
                           n_epochs=500)
 
         # Collect
-        eval_validation.append(np.max(train.eval_validation, axis=0))
+        eval_validation = np.concatenate((eval_validation, np.max(train.eval_validation.values(), axis=0).reshape(1, 2)), axis=0)
         print(eval_validation)
 
         # Reset logging
@@ -122,6 +122,9 @@ def main():
             handler.close()
             train.logger.removeHandler(handler)
         del train.logger
+
+    cv_eval = paths.get_plot_evaluation_path_for_model(model.get_root_path(), "_cv.pkl")
+    pkl.dump(eval_validation, open(cv_eval, "wb"))
 
 if __name__ == "__main__":
     main()

@@ -5,7 +5,8 @@ from lasagne.layers import get_all_layers, get_output_shape
 import load_data as ld
 from sklearn.cross_validation import LeaveOneLabelOut
 import numpy as np
-
+from utils import env_paths as paths
+import cPickle as pkl
 
 def main():
     add_pitch, add_roll, add_filter = False, False, True
@@ -19,12 +20,12 @@ def main():
     X = np.concatenate((train_set[0], test_set[0]), axis=0)
     y = np.concatenate((train_set[1], test_set[1]), axis=0)
 
-    n_conv = 2
+    n_conv = 1
     model = RCNN(n_in=(sequence_length, n_features),
                  n_filters=[64]*n_conv,
                  filter_sizes=[3]*n_conv,
                  pool_sizes=[2]*n_conv,
-                 rcl=[3, 3, 3],
+                 rcl=[1, 2, 3, 4],
                  rcl_dropout=0.5,
                  n_hidden=[512],
                  dropout_probability=0.5,
@@ -39,7 +40,7 @@ def main():
 
     lol = LeaveOneLabelOut(users)
     user = 0
-    eval_validation = []
+    eval_validation = np.empty((0, 2))
     for train_index, test_index in lol:
         user += 1
         X_train, X_test = X[train_index], X[test_index]
@@ -100,10 +101,10 @@ def main():
                           n_train_batches=n_train_batches,
                           n_test_batches=n_test_batches,
                           n_valid_batches=n_valid_batches,
-                          n_epochs=100)
+                          n_epochs=500)
 
         # Collect
-        eval_validation.append(np.max(train.eval_validation, axis=0))
+        eval_validation = np.concatenate((eval_validation, np.max(train.eval_validation.values(), axis=0).reshape(1, 2)), axis=0)
         print(eval_validation)
 
         # Reset logging
@@ -113,6 +114,8 @@ def main():
             train.logger.removeHandler(handler)
         del train.logger
 
+    cv_eval = paths.get_plot_evaluation_path_for_model(model.get_root_path(), "_cv.pkl")
+    pkl.dump(eval_validation, open(cv_eval, "wb"))
 
 if __name__ == "__main__":
     main()
