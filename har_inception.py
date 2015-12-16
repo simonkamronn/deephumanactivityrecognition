@@ -8,6 +8,7 @@ import numpy as np
 from utils import env_paths as paths
 import cPickle as pkl
 
+
 def main():
     add_pitch, add_roll, add_filter = False, False, True
     n_samples, step = 200, 50
@@ -94,7 +95,7 @@ def main():
                           n_train_batches=n_train_batches,
                           n_test_batches=n_test_batches,
                           n_valid_batches=n_valid_batches,
-                          n_epochs=3)
+                          n_epochs=500)
 
         # Collect
         eval_validation = np.concatenate((eval_validation, np.max(train.eval_validation.values(), axis=0).reshape(1, 2)), axis=0)
