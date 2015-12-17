@@ -9,11 +9,14 @@ import numpy as np
 from sklearn.cross_validation import LeaveOneLabelOut
 from utils import env_paths as paths
 import cPickle as pkl
+import time
+import datetime
+from os import rmdir
 
 
 def main():
-    add_pitch, add_roll, add_filter = True, True, True
-    n_samples, step = 200, 50
+    add_pitch, add_roll, add_filter = False, False, True
+    n_samples, step = 200, 100
     shuffle = False
     batch_size = 64
     (train_set, test_set, valid_set, (sequence_length, n_features, n_classes)), name, users = \
@@ -29,22 +32,7 @@ def main():
     X = np.concatenate((train_set[0], test_set[0]), axis=0)
     y = np.concatenate((train_set[1], test_set[1]), axis=0)
 
-    n_conv = 5
-    model = conv_RNN(n_in=(sequence_length, n_features),
-                     n_filters=[64]*n_conv,
-                     filter_sizes=[3]*n_conv,
-                     pool_sizes=[2]*n_conv,
-                     n_hidden=[100],
-                     conv_dropout=0.1,
-                     dropout_probability=0.5,
-                     n_out=n_classes,
-                     downsample=1,
-                     trans_func=rectify,
-                     out_func=softmax,
-                     batch_size=batch_size,
-                     factor=factor)
-    base_params = model.model_params
-
+    d = datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d%H%M%S')
     lol = LeaveOneLabelOut(users)
     user = 0
     eval_validation = np.empty((0, 2))
@@ -71,14 +59,35 @@ def main():
         n_test = test_set[0].shape[0]
         n_valid = valid_set[0].shape[0]
 
+        n_test_batches = 1
+        n_valid_batches = 1
+        batch_size = n_test
         n_train_batches = n_train//batch_size
-        n_test_batches = n_test//batch_size
-        n_valid_batches = n_valid//batch_size
 
         print("n_train_batches: %d, n_test_batches: %d, n_valid_batches: %d"
               % (n_train_batches, n_test_batches, n_valid_batches))
 
-        model.model_params = base_params
+        n_conv = 5
+        model = conv_RNN(n_in=(sequence_length, n_features),
+                         n_filters=[64]*n_conv,
+                         filter_sizes=[3]*n_conv,
+                         pool_sizes=[2]*n_conv,
+                         n_hidden=[100],
+                         conv_dropout=0.1,
+                         dropout_probability=0.5,
+                         n_out=n_classes,
+                         downsample=1,
+                         trans_func=rectify,
+                         out_func=softmax,
+                         batch_size=batch_size,
+                         factor=factor)
+
+        # Generate root path and edit
+        root_path = model.get_root_path()
+        model.root_path = "%s_cv_%s_%d" % (root_path, d, user)
+        paths.path_exists(model.root_path)
+        rmdir(root_path)
+
         f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
                                                                                               test_set,
                                                                                               valid_set)
@@ -96,7 +105,7 @@ def main():
                            pickle_f_custom_freq=100,
                            f_custom_eval=None)
         train.pickle = True
-        train.add_initial_training_notes("")
+        train.add_initial_training_notes("Standardizing data before adding features")
         train.write_to_logger("Dataset: %s" % name)
         train.write_to_logger("LOO user: %d" % user)
         train.write_to_logger("Training samples: %d" % n_train)
@@ -115,11 +124,7 @@ def main():
                           n_train_batches=n_train_batches,
                           n_test_batches=n_test_batches,
                           n_valid_batches=n_valid_batches,
-                          n_epochs=2)
-
-        # Collect
-        eval_validation = np.concatenate((eval_validation, np.max(train.eval_validation.values(), axis=0).reshape(1, 2)), axis=0)
-        print(eval_validation)
+                          n_epochs=300)
 
         # Reset logging
         handlers = train.logger.handlers[:]
@@ -128,10 +133,6 @@ def main():
             train.logger.removeHandler(handler)
         del train.logger
 
-    cv_eval = paths.get_plot_evaluation_path_for_model(model.get_root_path(), "_cv.pkl")
-    pkl.dump(eval_validation, open(cv_eval, "wb"))
-
-    return model
 
 if __name__ == "__main__":
     main()

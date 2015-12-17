@@ -1,3 +1,5 @@
+import theano.sandbox.cuda
+theano.sandbox.cuda.use('gpu0')
 from models.inception_sequence import Inception_seq
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify
@@ -7,11 +9,13 @@ from sklearn.cross_validation import LeaveOneLabelOut
 import numpy as np
 from utils import env_paths as paths
 import cPickle as pkl
-
+import time
+import datetime
+from os import rmdir
 
 def main():
     add_pitch, add_roll, add_filter = False, False, True
-    n_samples, step = 200, 50
+    n_samples, step = 200, 200
     shuffle = False
     batch_size = 64
     (train_set, test_set, valid_set, (sequence_length, n_features, n_classes)), name, users = \
@@ -21,19 +25,7 @@ def main():
     X = np.concatenate((train_set[0], test_set[0]), axis=0)
     y = np.concatenate((train_set[1], test_set[1]), axis=0)
 
-    model = Inception_seq(n_in=(sequence_length, n_features),
-                          inception_layers=[(16, 16, 0, 16, 0, 16)],
-                          pool_sizes=[2, 2, 2, 2],
-                          n_hidden=512,
-                          dropout_probability=0.5,
-                          inception_dropout=0.2,
-                          n_out=n_classes,
-                          trans_func=rectify,
-                          out_func=softmax,
-                          batch_size=batch_size,
-                          batch_norm=False)
-    base_params = model.model_params
-
+    d = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d%H%M%S'))
     lol = LeaveOneLabelOut(users)
     user = 0
     eval_validation = np.empty((0, 2))
@@ -51,11 +43,31 @@ def main():
         n_train_batches = n_train//batch_size
         n_test_batches = n_test//batch_size
         n_valid_batches = n_test//batch_size
-
         print("n_train_batches: %d, n_test_batches: %d" % (n_train_batches, n_test_batches))
-        # num_1x1, num_2x1_proj, reduce_3x1, num_3x1, reduce_5x1, num_5x1
 
-        model.model_params = base_params
+        # num_1x1, num_2x1_proj, reduce_3x1, num_3x1, reduce_5x1, num_5x1
+        model = Inception_seq(n_in=(sequence_length, n_features),
+                              inception_layers=[(8, 8, 0, 8, 0, 8),
+                                                (16, 8, 0, 16, 0, 8),
+                                                (32, 16, 0, 32, 0, 16),
+                                                (64, 16, 0, 64, 0, 16)],
+                              pool_sizes=[2, 2, 2, 2],
+                              n_hidden=512,
+                              dropout_probability=0.5,
+                              inception_dropout=0.2,
+                              n_out=n_classes,
+                              trans_func=rectify,
+                              out_func=softmax,
+                              batch_size=batch_size,
+                              batch_norm=False)
+
+        # Generate root path and edit
+        root_path = model.get_root_path()
+        model.root_path = "%s_cv_%s_%d" % (root_path, d, user)
+        paths.path_exists(model.root_path)
+        rmdir(root_path)
+
+        # Build model
         f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
                                                                                               test_set,
                                                                                               valid_set)
@@ -73,8 +85,8 @@ def main():
                            output_freq=1,
                            pickle_f_custom_freq=100,
                            f_custom_eval=None)
-        train.pickle = True
-        train.add_initial_training_notes("")
+        train.pickle = False
+        train.add_initial_training_notes("Standardizing data before adding features")
         train.write_to_logger("Dataset: %s" % name)
         train.write_to_logger("LOO user: %d" % user)
         train.write_to_logger("Training samples: %d" % n_train)
@@ -95,11 +107,7 @@ def main():
                           n_train_batches=n_train_batches,
                           n_test_batches=n_test_batches,
                           n_valid_batches=n_valid_batches,
-                          n_epochs=500)
-
-        # Collect
-        eval_validation = np.concatenate((eval_validation, np.max(train.eval_validation.values(), axis=0).reshape(1, 2)), axis=0)
-        print(eval_validation)
+                          n_epochs=300)
 
         # Reset logging
         handlers = train.logger.handlers[:]
@@ -108,8 +116,6 @@ def main():
             train.logger.removeHandler(handler)
         del train.logger
 
-    cv_eval = paths.get_plot_evaluation_path_for_model(model.get_root_path(), "_cv.pkl")
-    pkl.dump(eval_validation, open(cv_eval, "wb"))
 
 if __name__ == "__main__":
     main()
