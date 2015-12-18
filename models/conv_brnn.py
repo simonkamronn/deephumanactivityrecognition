@@ -8,7 +8,7 @@ from lasagne.objectives import aggregate, categorical_crossentropy, categorical_
 from lasagne.layers import *
 from lasagne_extensions.updates import adam, rmsprop
 CONST_FORGET_B = 1.
-GRAD_CLIP = 5
+GRAD_CLIP = 1
 
 
 class conv_BRNN(Model):
@@ -39,8 +39,9 @@ class conv_BRNN(Model):
                                  num_filters=n_filter,
                                  filter_size=(filter_size, 1),
                                  pad="same",
-                                 nonlinearity=self.transf)
-            if pool_size > 1:
+                                 nonlinearity=self.transf,
+                                 stride=(pool_size, 1))
+            if pool_size > 10:
                 self.log += "\nAdding max pooling layer: %d" % pool_size
                 l_prev = MaxPool2DLayer(l_prev, pool_size=(pool_size, 1))
             if conv_dropout:
@@ -50,8 +51,8 @@ class conv_BRNN(Model):
 
         # Reshape for LSTM
         batch_size /= factor
-        self.log += "\nGlobal Pooling: max"
-        l_prev = GlobalPoolLayer(l_prev, pool_function=T.max)
+        # self.log += "\nGlobal Pooling: max"
+        # l_prev = GlobalPoolLayer(l_prev, pool_function=T.max)
         l_prev = ReshapeLayer(l_prev, (batch_size, factor, -1))
 
         # Add BLSTM layers
@@ -128,7 +129,7 @@ class conv_BRNN(Model):
         sym_beta1 = T.scalar('beta1')
         sym_beta2 = T.scalar('beta2')
         grads = T.grad(loss_cc, all_params)
-        grads = [T.clip(g, -5, 5) for g in grads]
+        grads = [T.clip(g, -GRAD_CLIP, GRAD_CLIP) for g in grads]
         updates = rmsprop(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
 
         inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2]
