@@ -11,8 +11,8 @@ from os import rmdir
 
 
 def main():
-    add_pitch, add_roll, add_filter = True, True, True
-    n_samples, step = 200, 50
+    add_pitch, add_roll, add_filter = False, False, True
+    n_samples, step = 200, 40
     shuffle = False
     batch_size = 64
     (train_set, test_set, valid_set, (sequence_length, n_features, n_classes)), name, users = \
@@ -21,7 +21,7 @@ def main():
 
     # The data is structured as (samples, sequence, features) but to properly use the convolutional RNN we need a longer
     # time
-    factor = 3
+    factor = 5
     sequence_length *= factor
 
     # Concat train and test data
@@ -31,7 +31,6 @@ def main():
     d = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d%H%M%S'))
     lol = LeaveOneLabelOut(users)
     user = 0
-    eval_validation = np.empty((0, 2))
     for train_index, test_index in lol:
         user += 1
         X_train, X_test = X[train_index], X[test_index]
@@ -55,9 +54,10 @@ def main():
         n_test = test_set[0].shape[0]
         n_valid = valid_set[0].shape[0]
 
+        n_test_batches = 1
+        n_valid_batches = 1
+        batch_size = n_test
         n_train_batches = n_train//batch_size
-        n_test_batches = n_test//batch_size
-        n_valid_batches = n_valid//batch_size
 
         print("n_train_batches: %d, n_test_batches: %d, n_valid_batches: %d"
               % (n_train_batches, n_test_batches, n_valid_batches))
@@ -86,21 +86,21 @@ def main():
         f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
                                                                                               test_set,
                                                                                               valid_set)
+        test_args['inputs']['batchsize'] = batch_size
+        validate_args['inputs']['batchsize'] = batch_size
         train_args['inputs']['batchsize'] = batch_size
         train_args['inputs']['learningrate'] = 0.003
         train_args['inputs']['beta1'] = 0.9
         train_args['inputs']['beta2'] = 1e-6
-        test_args['inputs']['batchsize'] = batch_size
-        validate_args['inputs']['batchsize'] = batch_size
 
         train = TrainModel(model=model,
                            anneal_lr=0.9,
-                           anneal_lr_freq=100,
+                           anneal_lr_freq=50,
                            output_freq=1,
                            pickle_f_custom_freq=100,
                            f_custom_eval=None)
         train.pickle = True
-        train.add_initial_training_notes("")
+        train.add_initial_training_notes("Standardizing data after adding features")
         train.write_to_logger("Dataset: %s" % name)
         train.write_to_logger("LOO user: %d" % user)
         train.write_to_logger("Training samples: %d" % n_train)
@@ -112,13 +112,14 @@ def main():
         train.write_to_logger("Add pitch: %s\nAdd roll: %s" % (add_pitch, add_roll))
         train.write_to_logger("Add filter separated signals: %s" % add_filter)
         train.write_to_logger("Transfer function: %s" % model.transf)
+
         train.train_model(f_train=f_train, train_args=train_args,
                           f_test=f_test, test_args=test_args,
                           f_validate=f_validate, validation_args=validate_args,
                           n_train_batches=n_train_batches,
                           n_test_batches=n_test_batches,
                           n_valid_batches=n_valid_batches,
-                          n_epochs=300)
+                          n_epochs=500)
 
         # Reset logging
         handlers = train.logger.handlers[:]
