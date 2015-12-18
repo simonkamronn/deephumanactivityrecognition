@@ -40,8 +40,8 @@ class conv_BRNN(Model):
                                  filter_size=(filter_size, 1),
                                  pad="same",
                                  nonlinearity=self.transf,
-                                 stride=(pool_size, 1))
-            if pool_size > 10:
+                                 stride=(1, 1))
+            if pool_size > 1:
                 self.log += "\nAdding max pooling layer: %d" % pool_size
                 l_prev = MaxPool2DLayer(l_prev, pool_size=(pool_size, 1))
             if conv_dropout:
@@ -51,8 +51,8 @@ class conv_BRNN(Model):
 
         # Reshape for LSTM
         batch_size /= factor
-        # self.log += "\nGlobal Pooling: max"
-        # l_prev = GlobalPoolLayer(l_prev, pool_function=T.max)
+        self.log += "\nGlobal Pooling: max"
+        l_prev = GlobalPoolLayer(l_prev, pool_function=T.max)
         l_prev = ReshapeLayer(l_prev, (batch_size, factor, -1))
 
         # Add BLSTM layers
@@ -65,13 +65,13 @@ class conv_BRNN(Model):
                 grad_clipping=grad_clip,
                 peepholes=peepholes,
                 ingate=Gate(
-                    W_in=lasagne.init.HeUniform(),
-                    W_hid=lasagne.init.HeUniform()
+                    W_in=lasagne.init.GlorotUniform(),
+                    W_hid=lasagne.init.GlorotUniform()
                 ),
                 forgetgate=Gate(
                     b=lasagne.init.Constant(CONST_FORGET_B)
                 ),
-                nonlinearity=lasagne.nonlinearities.tanh
+                nonlinearity=lasagne.nonlinearities.rectify
             )
             l_backward = LSTMLayer(
                 l_prev,
@@ -79,13 +79,13 @@ class conv_BRNN(Model):
                 grad_clipping=grad_clip,
                 peepholes=peepholes,
                 ingate=Gate(
-                    W_in=lasagne.init.HeUniform(),
-                    W_hid=lasagne.init.HeUniform()
+                    W_in=lasagne.init.GlorotUniform(),
+                    W_hid=lasagne.init.GlorotUniform()
                 ),
                 forgetgate=Gate(
                     b=lasagne.init.Constant(CONST_FORGET_B)
                 ),
-                nonlinearity=lasagne.nonlinearities.tanh,
+                nonlinearity=lasagne.nonlinearities.rectify,
                 backwards=True
             )
             print("LSTM forward shape", get_output_shape(l_prev))
