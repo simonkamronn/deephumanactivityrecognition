@@ -77,7 +77,7 @@ def expand_target(y, length):
     return np.rollaxis(np.tile(y, (length, 1, 1)), 1,)
 
 
-def split_signal(data, fs, cutoff=0.01, order=4):
+def split_signal(data, fs, cutoff=0.1, order=2):
     n_win, n_samples, n_dim = data.shape
     tmp = np.reshape(data, (n_win*n_samples, n_dim))
     normal_cutoff = cutoff / (0.5 * fs)
@@ -112,3 +112,43 @@ def rolling_window(a, window, step=1):
             a = rolling_window_lastaxis(a, win, step)
             a = a.swapaxes(-2, i)
     return a
+
+
+def one_hot(labels, n_classes=None):
+    """
+    Converts an array of label integers to a one-hot matrix encoding
+    :parameters:
+        - labels : np.ndarray, dtype=int
+            Array of integer labels, in {0, n_classes - 1}
+        - n_classes : int
+            Total number of classes
+    :returns:
+        - one_hot : np.ndarray, dtype=bool, shape=(labels.shape[0], n_classes)
+            One-hot matrix of the input
+    """
+    if n_classes is None:
+        n_classes = labels.max() + 1
+
+    m = np.zeros((labels.shape[0], n_classes)).astype(bool)
+    m[range(labels.shape[0]), labels] = True
+    return m
+
+
+def downsample(data, ratio=2):
+    # Downsample data with ratio
+    n_samp, n_dim = data.shape
+
+    # New number of samples
+    n_resamp = n_samp/ratio
+
+    # Reshape, mean and shape back
+    data = np.reshape(data[:n_resamp*ratio], (n_resamp, ratio, n_dim)).mean(axis=1)
+    return data
+
+
+def window_segment(data, window = 64):
+    # Segment in windows on axis 1
+    n_samp, n_dim = data.shape
+    n_win = n_samp//(window)
+    data = np.reshape(data[:n_win * window], (n_win, window, n_dim))
+    return data
