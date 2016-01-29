@@ -2,7 +2,7 @@ from models.inception_sequence import Inception_seq
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify
 from lasagne.layers import get_all_layers, get_output_shape
-import load_data as ld
+from data_preparation.load_data import LoadHAR
 from sklearn.cross_validation import LeaveOneLabelOut
 import numpy as np
 from utils import env_paths as paths
@@ -14,14 +14,10 @@ from os import rmdir
 def main():
     add_pitch, add_roll, add_filter = False, False, True
     n_samples, step = 200, 200
-    shuffle = False
+    load_data = LoadHAR(add_pitch=add_pitch, add_roll=add_roll, add_filter=add_filter,
+                        n_samples=n_samples, step=step)
     batch_size = 64
-    (train_set, test_set, valid_set, (sequence_length, n_features, n_classes)), name, users = \
-        ld.LoadHAR().uci_hapt(add_pitch=add_pitch, add_roll=add_roll, add_filter=add_filter,
-                              n_samples=n_samples, step=step, shuffle=shuffle)
-
-    X = np.concatenate((train_set[0], test_set[0]), axis=0)
-    y = np.concatenate((train_set[1], test_set[1]), axis=0)
+    X, y, name, users, stats = load_data.uci_hapt()
 
     d = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d%H%M%S'))
     lol = LeaveOneLabelOut(users)
@@ -54,7 +50,7 @@ def main():
                                                 (64, 32, 0, 64, 0, 32)],
                               pool_sizes=[2, 2, 0, 2, 0, 2],
                               n_hidden=512,
-                              dropout_probability=0.5,
+                              output_dropout=0.5,
                               inception_dropout=0.2,
                               n_out=n_classes,
                               trans_func=rectify,

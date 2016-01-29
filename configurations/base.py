@@ -23,6 +23,7 @@ class ModelConfiguration(object):
         self.model = None
         self.n_features = None
         self.log = ''
+        self.stats = 0
 
     def load_datasets(self, datasets, label_limit=100):
         # Load all datasets and concatenate
@@ -39,7 +40,10 @@ class ModelConfiguration(object):
             for user in users_tmp:
                 users.append('%s%02d' % (name_tmp, user))
             name += '_' + name_tmp
-        X = np.concatenate((X, stats), axis=1)
+        if len(stats) > 0:
+            X = np.concatenate((X, stats), axis=1)
+            self.stats = stats.shape[1]
+            self.log += '\nStats: %d' % self.stats
         self.log += '\nLoaded %s with %d samples' % (name, X.shape[0])
         self.log += '\nData shape: %s' % str(X.shape)
 
@@ -62,7 +66,7 @@ class ModelConfiguration(object):
 
         self.d = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d%H%M%S'))
 
-    def run(self, train_index, test_index, lr, n_epochs, model, train, load_data, factor=1):
+    def run(self, train_index, test_index, lr, n_epochs, model, train, load_data, factor=1, batch_size=None):
         x_train, x_test = self.X[train_index], self.X[test_index]
         y_train, y_test = self.y[train_index], self.y[test_index]
         n_windows, sequence_length, n_features = x_train.shape
@@ -90,9 +94,12 @@ class ModelConfiguration(object):
 
         n_train = train_set[0].shape[0]
         n_test = test_set[0].shape[0]
-        n_test_batches = 1
-        n_valid_batches = 1
-        batch_size = n_test
+        if batch_size is None:
+            n_test_batches = 1
+            batch_size = n_test
+        else:
+            n_test_batches = n_test//batch_size
+
         n_train_batches = n_train//batch_size
         print("n_train_batches: %d, n_test_batches: %d" % (n_train_batches, n_test_batches))
 
@@ -156,7 +163,6 @@ class ModelConfiguration(object):
                           f_validate, validate_args,
                           n_train_batches=n_train_batches,
                           n_test_batches=n_test_batches,
-                          n_valid_batches=n_valid_batches,
                           n_epochs=n_epochs)
 
         # Reset logging

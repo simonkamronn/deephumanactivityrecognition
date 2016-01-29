@@ -36,10 +36,11 @@ class convRNN(Model):
         l_prev = DimshuffleLayer(l_prev, (0, 3, 2, 1))
 
         # Separate into raw values and statistics
-        stats_layer = SliceLayer(l_prev, indices=slice(sequence_length, None), axis=2)
-        stats_layer = ReshapeLayer(stats_layer, (-1, factor, stats*n_features))
-        print('Stats layer shape', stats_layer.output_shape)
-        l_prev = SliceLayer(l_prev, indices=slice(0, sequence_length), axis=2)
+        if stats > 0:
+            stats_layer = SliceLayer(l_prev, indices=slice(sequence_length, None), axis=2)
+            stats_layer = ReshapeLayer(stats_layer, (-1, factor, stats*n_features))
+            print('Stats layer shape', stats_layer.output_shape)
+            l_prev = SliceLayer(l_prev, indices=slice(0, sequence_length), axis=2)
 
         # Add input noise
         # self.log += "\nAdding noise layer: 0.1"
@@ -76,7 +77,8 @@ class convRNN(Model):
         l_prev = ReshapeLayer(l_prev, (-1, factor, s2*s3))
 
         # Concat with statistics
-        l_prev = ConcatLayer((l_prev, stats_layer), axis=2)
+        if stats > 2:
+            l_prev = ConcatLayer((l_prev, stats_layer), axis=2)
 
         # Add LSTM layers
         print("LSTM input shape", get_output_shape(l_prev))

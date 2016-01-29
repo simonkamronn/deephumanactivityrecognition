@@ -1,5 +1,5 @@
 from os import rmdir
-from lasagne.nonlinearities import rectify, softmax
+from lasagne.nonlinearities import rectify, softmax, leaky_rectify
 from base import ModelConfiguration
 from data_preparation.load_data import LoadHAR
 from models.resnet import ResNet
@@ -10,9 +10,9 @@ import numpy as np
 
 
 def main():
-    n_samples, step = 50, 50
+    n_samples, step = 200, 200
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=True, n_samples=n_samples,
-                        step=step, normalize=True, comp_magnitude=False)
+                        step=step, normalize=False, comp_magnitude=False)
 
     conf = ModelConfiguration()
     conf.load_datasets([load_data.uci_hapt], label_limit=100)
@@ -32,22 +32,22 @@ def main():
         # conf.cv = StratifiedKFold(np.argmax(conf.y, axis=1), n_folds=10)
 
         # And shuffle
-        conf.cv = StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=10, test_size=0.1)
+        conf.cv = StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=1, test_size=0.3)
 
     for train_index, test_index in conf.cv:
         conf.user = user
 
         model = ResNet(n_in=(n_samples, conf.n_features),
-                       n_filters=[8, 16, 32],
-                       pool_sizes=[2, 2, 2],
-                       n_hidden=[128],
-                       conv_dropout=0.5,
+                       n_filters=[32, 64, 128, 256],
+                       pool_sizes=[2, 2, 2, 2],
+                       n_hidden=[512],
+                       conv_dropout=0.3,
                        dropout=0.5,
                        n_out=conf.n_classes,
-                       trans_func=rectify,
+                       trans_func=leaky_rectify,
                        out_func=softmax,
                        batch_norm=True,
-                       stats=2)
+                       stats=conf.stats)
 
         if len(conf.cv) > 1:
             user_idx += 1

@@ -35,7 +35,8 @@ else:
 
 class LoadHAR(object):
     def __init__(self, root_folder=ROOT_FOLDER, add_pitch=False, add_roll=False, expand=False,
-                 add_filter=False, n_samples=200, step=200, normalize=True, comp_magnitude=False):
+                 add_filter=False, n_samples=200, step=200, normalize=True, comp_magnitude=False,
+                 simple_labels=False, common_labels=False):
         self.root_folder = root_folder
         if root_folder is None:
             raise RuntimeError('Invalid folder')
@@ -49,7 +50,8 @@ class LoadHAR(object):
         self.step = step
         self.normalize = normalize
         self.comp_magnitude = comp_magnitude
-        self.simple = False
+        self.simple_labels = simple_labels
+        self.common_labels = common_labels
 
     def uci_hapt(self):
         """
@@ -70,7 +72,7 @@ class LoadHAR(object):
         self.name = "UCI HAPT"
         subfolder = 'UCI/HAPT Data Set/RawData/'
         data_file = self.root_folder+subfolder+'/data.npz'
-        if not self.simple:
+        if not self.simple_labels:
             activity_map = {1: 'WALKING', 2: 'WALKING_UPSTAIRS', 3: 'WALKING_DOWNSTAIRS', 4: 'SITTING',
                             5: 'STANDING', 6: 'LAYING', 7: 'STAND_TO_SIT', 8: 'SIT_TO_STAND',
                             9: 'SIT_TO_LIE', 10: 'LIE_TO_SIT', 11: 'STAND_TO_LIE', 12: 'LIE_TO_STAND'}
@@ -112,6 +114,7 @@ class LoadHAR(object):
                         except ValueError, e:
                             print(e)
                             print(segment.shape)
+
                     # Collect data
                     data_array = np.concatenate((data_array, segment))
                     y = np.concatenate((y, [activity]*segment.shape[0]))
@@ -161,7 +164,10 @@ class LoadHAR(object):
                                        comp_magnitude=self.comp_magnitude)
 
         # Convert to common labels
-        y = self.map_to_common_activities(y, activity_map)
+        if self.common_labels:
+            y = self.map_to_common_activities(y, activity_map)
+        else:
+            y = y - 1
 
         # Save to disk
         # pickle.dump(data, open(data_file,"w"))
@@ -495,7 +501,7 @@ class LoadHAR(object):
         n_win, n_samp, n_dim = data.shape
         stats = []
 
-        data = lowpass_filter(data, fs=50, cutoff=20)
+        # data = lowpass_filter(data, fs=50, cutoff=20)
 
         if ratio > 1:
             data = downsample(data.reshape(-1, n_dim), ratio=ratio).\
@@ -530,7 +536,6 @@ class LoadHAR(object):
             # data_std = data.reshape((-1, n_dim)).std(axis=0)
             # data = (data.reshape((-1, n_dim)) - data_mean).reshape((n_win, n_samp, n_dim))
             # data = (data.reshape((-1, n_dim)) / data_std).reshape((n_win, n_samp, n_dim))
-
 
             for idx in range(data.shape[0]):
                 data_mean = data[idx].mean(axis=0)

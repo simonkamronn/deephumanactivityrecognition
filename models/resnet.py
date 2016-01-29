@@ -4,7 +4,8 @@ import theano.tensor as T
 from base import Model
 from lasagne_extensions.nonlinearities import rectify, softmax
 from lasagne.layers import get_output, get_output_shape, DenseLayer, InputLayer, ConcatLayer, \
-    ReshapeLayer, DimshuffleLayer, get_all_params, Conv2DLayer, Pool2DLayer, GlobalPoolLayer, SliceLayer
+    ReshapeLayer, DimshuffleLayer, get_all_params, Conv2DLayer, Pool2DLayer, GlobalPoolLayer, \
+    SliceLayer, DropoutLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
 # from lasagne.layers.dnn import Conv2DDNNLayer as
 # from lasagne.layers.dnn import Pool2DDNNLayer as
@@ -28,9 +29,10 @@ class ResNet(Model):
         print("Input shape: ", get_output_shape(l_prev))
 
         # Separate into raw values and statistics
-        stats_layer = SliceLayer(l_prev, indices=slice(sequence_length, None), axis=1)
-        stats_layer = ReshapeLayer(stats_layer, (-1, stats*n_features))
-        l_prev = SliceLayer(l_prev, indices=slice(0, sequence_length), axis=1)
+        if stats > 0:
+            stats_layer = SliceLayer(l_prev, indices=slice(sequence_length, None), axis=1)
+            stats_layer = ReshapeLayer(stats_layer, (-1, stats*n_features))
+            l_prev = SliceLayer(l_prev, indices=slice(0, sequence_length), axis=1)
 
         if ccf:
             self.log += "\nAdding cross-channel feature layer"
@@ -77,11 +79,11 @@ class ResNet(Model):
                                     num_filters=n_filter,
                                     nonlinearity=self.transf,
                                     normalize=batch_norm,
-                                    stride=(pool_size, 1),
+                                    stride=(1, 1),
                                     conv_dropout=conv_dropout)
-            # if pool_size > 2:
-            #     self.log += "\nAdding max pool layer: %d" % pool_size
-            #     l_prev = Pool2DLayer(l_prev, pool_size=(pool_size, 1), name='Max Pool')
+            if pool_size > 2:
+                self.log += "\nAdding max pool layer: %d" % pool_size
+                l_prev = Pool2DLayer(l_prev, pool_size=(pool_size, 1), name='Max Pool')
             print("Residual out shape", get_output_shape(l_prev))
 
         self.log += "\nGlobal Pooling: mean"
@@ -89,7 +91,8 @@ class ResNet(Model):
         print("GlobalPoolLayer out shape", get_output_shape(l_prev))
 
         # Append statistics
-        l_prev = ConcatLayer((l_prev, stats_layer), axis=1)
+        if stats > 0:
+            l_prev = ConcatLayer((l_prev, stats_layer), axis=1)
 
         for n_hid in n_hidden:
             self.log += "\nAdding dense layer with %d units" % n_hid
@@ -98,7 +101,7 @@ class ResNet(Model):
             l_prev = BatchNormalizeLayer(l_prev, normalize=batch_norm, nonlinearity=self.transf)
             if dropout > 0.0:
                 self.log += "\nAdding output dropout with probability %.2f" % dropout
-                l_prev = TiedDropoutLayer(l_prev, p=dropout, name='Dropout')
+                l_prev = DropoutLayer(l_prev, p=dropout, name='Dropout')
 
         if batch_norm:
             self.log += "\nUsing batch normalization"
@@ -139,21 +142,23 @@ class ResNet(Model):
         )
 
         f_test = theano.function(
-            [self.sym_index, self.sym_batchsize], [loss_eval, loss_acc],
+            [self.sym_batchsize], [loss_eval, loss_acc],
             givens={
-                self.sym_x: self.sh_test_x[self.batch_slice],
-                self.sym_t: self.sh_test_t[self.batch_slice],
+                self.sym_x: self.sh_test_x,
+                self.sym_t: self.sh_test_t,
             },
+            on_unused_input='ignore',
         )
 
         f_validate = None
         if validation_set is not None:
             f_validate = theano.function(
-                [self.sym_index, self.sym_batchsize], [loss_eval, loss_acc],
+                [self.sym_batchsize], [loss_eval, loss_acc],
                 givens={
-                    self.sym_x: self.sh_valid_x[self.batch_slice],
-                    self.sym_t: self.sh_valid_t[self.batch_slice],
+                    self.sym_x: self.sh_valid_x,
+                    self.sym_t: self.sh_valid_t,
                 },
+                on_unused_input='ignore',
             )
 
         self.train_args['inputs']['batchsize'] = 128
