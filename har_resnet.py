@@ -1,19 +1,20 @@
+import datetime
+import time
+from os import rmdir
+
+import matplotlib.pyplot as plt
+import numpy as np
+from lasagne.layers import get_all_layers, get_output_shape
+from lasagne.nonlinearities import rectify, softmax
+from sklearn.cross_validation import LeaveOneLabelOut
+from sklearn.metrics import confusion_matrix
+from sklearn.preprocessing import StandardScaler
+from data_preparation.load_data import LoadHAR, ACTIVITY_MAP
+from lasagne_extensions.confusionmatrix import ConfusionMatrix
 from models.resnet import ResNet
 from training.train import TrainModel
-from lasagne.nonlinearities import rectify, softmax, leaky_rectify
-from lasagne.layers import get_all_layers, get_output_shape
-from load_data import LoadHAR, one_hot, ACTIVITY_MAP
-from sklearn.cross_validation import LeaveOneLabelOut
-import numpy as np
 from utils import env_paths as paths
-import time
-import datetime
-from os import rmdir
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import confusion_matrix
-from lasagne_extensions.confusionmatrix import ConfusionMatrix
-import matplotlib.pyplot as plt
-
+from har_utils import one_hot
 
 def main():
     add_pitch, add_roll, add_filter = False, False, True
@@ -23,16 +24,17 @@ def main():
     batch_size = 64
 
     # Define datasets and load iteratively
-    datasets = [load_data.wisdm1]
+    datasets = [load_data.idash, load_data.wisdm1, load_data.uci_mhealth, load_data.uci_hapt]
     X, y, name, users = datasets[0]()
-    users = ['%s_%d' % (name, user) for user in users]
+    users = ['%s_%02d' % (name, user) for user in users]
     for dataset in datasets[1:]:
         X_tmp, y_tmp, name_tmp, users_tmp = dataset()
         X = np.concatenate((X, X_tmp))
         y = np.concatenate((y, y_tmp))
         for user in users_tmp:
-            users.append('%s_%d' % (name_tmp, user))
+            users.append('%s_%02d' % (name_tmp, user))
         name += '_' + name_tmp
+    users = np.array(users)
 
     print('Users: %d' % len(np.unique(users)))
     print(X.shape)
@@ -43,18 +45,19 @@ def main():
 
     # Create a time-string for our cv run
     d = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d_%H%M%S'))
-    lol = LeaveOneLabelOut(users)
-    user = users[0]
+    cv = LeaveOneLabelOut(users)
 
     user_idx = 0
+    user_names = np.unique(users)
+    user = None
     if user is not None:
         train_idx = users != user
         test_idx = users == user
-        lol = ((train_idx, test_idx), )
+        cv = ((train_idx, test_idx), )
 
-    for train_index, test_index in lol:
+    for train_index, test_index in cv:
+        user = user_names[user_idx]
         user_idx += 1
-        user = users[user_idx]
         X_train, X_test = X[train_index], X[test_index]
         y_train, y_test = y[train_index], y[test_index]
 
@@ -75,14 +78,14 @@ def main():
         n_test = test_set[0].shape[0]
 
         n_test_batches = 1
-        n_valid_batches = 1
+        n_valid_batches = None
         batch_size = n_test
         n_train_batches = n_train//batch_size
         print("n_train_batches: %d, n_test_batches: %d" % (n_train_batches, n_test_batches))
 
         model = ResNet(n_in=(sequence_length, n_features),
-                       n_filters=[32, 32, 64, 64, 64, 128, 128],
-                       pool_sizes=[2, 1, 2, 1, 1, 2, 1],
+                       n_filters=[32, 32, 64, 64],
+                       pool_sizes=[2, 1, 2, 1],
                        n_hidden=[512],
                        conv_dropout=0.5,
                        dropout=0.5,
@@ -92,19 +95,19 @@ def main():
                        batch_size=batch_size,
                        batch_norm=True)
 
-        if len(lol) > 1:
+        if len(cv) > 1:
             # Generate root path and edit
             root_path = model.get_root_path()
-            model.root_path = "%s_cv_%s_%d" % (root_path, d, user)
+            model.root_path = "%s_cv_%s_%s" % (root_path, d, user)
             paths.path_exists(model.root_path)
             rmdir(root_path)
 
         # Build model
         f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
                                                                                               test_set,
-                                                                                              valid_set)
+                                                                                              None)
         train_args['inputs']['batchsize'] = batch_size
-        train_args['inputs']['learningrate'] = 0.003
+        train_args['inputs']['learningrate'] = 0.001
         train_args['inputs']['beta1'] = 0.9
         train_args['inputs']['beta2'] = 1e-6
 
@@ -122,7 +125,7 @@ def main():
             # cfm.batchAdd(t_class, y_class)
             # print(cfm)
 
-            cm = confusion_matrix(t_class, y_class, labels=ACTIVITY_MAP.values())
+            cm = confusion_matrix(t_class, y_class)
             cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
             plt.clf()
             plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
@@ -141,7 +144,7 @@ def main():
         train.add_initial_training_notes("Standardizing data after adding features\
                                           \nUsing striding instead of pooling")
         train.write_to_logger("Dataset: %s" % name)
-        train.write_to_logger("LOO user: %d" % user)
+        train.write_to_logger("LOO user: %s" % user)
         train.write_to_logger("Training samples: %d" % n_train)
         train.write_to_logger("Test samples: %d" % n_test)
         train.write_to_logger("Sequence length: %d" % sequence_length)

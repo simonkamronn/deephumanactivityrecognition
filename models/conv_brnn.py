@@ -3,12 +3,12 @@ theano.config.floatX = 'float32'
 import theano.tensor as T
 import lasagne
 from base import Model
-from lasagne_extensions.nonlinearities import rectify, softmax
+from lasagne_extensions.nonlinearities import rectify, softmax, tanh
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
 from lasagne.layers import *
 from lasagne_extensions.updates import adam, rmsprop
 CONST_FORGET_B = 1.
-GRAD_CLIP = 1
+GRAD_CLIP = 5
 
 
 class conv_BRNN(Model):
@@ -35,24 +35,25 @@ class conv_BRNN(Model):
         print("Conv input shape", get_output_shape(l_prev))
         for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
             self.log += "\nAdding 2D conv layer: %d x %d" % (n_filter, filter_size)
+            self.log += "\nStride: %d" % pool_size
             l_prev = Conv2DLayer(l_prev,
                                  num_filters=n_filter,
                                  filter_size=(filter_size, 1),
                                  pad="same",
                                  nonlinearity=self.transf,
-                                 stride=(1, 1))
-            if pool_size > 1:
+                                 stride=(pool_size, 1))
+            if pool_size > 3:
                 self.log += "\nAdding max pooling layer: %d" % pool_size
                 l_prev = MaxPool2DLayer(l_prev, pool_size=(pool_size, 1))
             if conv_dropout:
                 l_prev = DropoutLayer(l_prev, p=conv_dropout)
-                self.log += "\nAdding output dropout: %.2f" % conv_dropout
+                self.log += "\nAdding dropout: %.2f" % conv_dropout
         print("Conv out shape", get_output_shape(l_prev))
 
         # Reshape for LSTM
         batch_size /= factor
-        self.log += "\nGlobal Pooling: max"
-        l_prev = GlobalPoolLayer(l_prev, pool_function=T.max)
+        self.log += "\nGlobal Pooling: average"
+        l_prev = GlobalPoolLayer(l_prev, pool_function=T.mean)
         l_prev = ReshapeLayer(l_prev, (batch_size, factor, -1))
 
         # Add BLSTM layers
@@ -71,7 +72,7 @@ class conv_BRNN(Model):
                 forgetgate=Gate(
                     b=lasagne.init.Constant(CONST_FORGET_B)
                 ),
-                nonlinearity=lasagne.nonlinearities.rectify
+                nonlinearity=tanh
             )
             l_backward = LSTMLayer(
                 l_prev,
@@ -85,7 +86,7 @@ class conv_BRNN(Model):
                 forgetgate=Gate(
                     b=lasagne.init.Constant(CONST_FORGET_B)
                 ),
-                nonlinearity=lasagne.nonlinearities.rectify,
+                nonlinearity=tanh,
                 backwards=True
             )
             print("LSTM forward shape", get_output_shape(l_prev))
@@ -130,7 +131,7 @@ class conv_BRNN(Model):
         sym_beta2 = T.scalar('beta2')
         grads = T.grad(loss_cc, all_params)
         grads = [T.clip(g, -GRAD_CLIP, GRAD_CLIP) for g in grads]
-        updates = rmsprop(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
+        updates = adam(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
 
         inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2]
         f_train = theano.function(

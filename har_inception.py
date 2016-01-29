@@ -1,5 +1,3 @@
-import theano.sandbox.cuda
-theano.sandbox.cuda.use('gpu0')
 from models.inception_sequence import Inception_seq
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify
@@ -8,10 +6,10 @@ import load_data as ld
 from sklearn.cross_validation import LeaveOneLabelOut
 import numpy as np
 from utils import env_paths as paths
-import cPickle as pkl
 import time
 import datetime
 from os import rmdir
+
 
 def main():
     add_pitch, add_roll, add_filter = False, False, True
@@ -28,7 +26,6 @@ def main():
     d = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d%H%M%S'))
     lol = LeaveOneLabelOut(users)
     user = 0
-    eval_validation = np.empty((0, 2))
     for train_index, test_index in lol:
         user += 1
         X_train, X_test = X[train_index], X[test_index]
@@ -36,13 +33,15 @@ def main():
 
         train_set = (X_train, y_train)
         test_set = (X_test, y_test)
+        valid_set = test_set
 
         n_train = train_set[0].shape[0]
         n_test = test_set[0].shape[0]
 
+        n_test_batches = 1
+        n_valid_batches = 1
+        batch_size = n_test
         n_train_batches = n_train//batch_size
-        n_test_batches = n_test//batch_size
-        n_valid_batches = n_test//batch_size
         print("n_train_batches: %d, n_test_batches: %d" % (n_train_batches, n_test_batches))
 
         # num_1x1, num_2x1_proj, reduce_3x1, num_3x1, reduce_5x1, num_5x1
@@ -50,8 +49,10 @@ def main():
                               inception_layers=[(8, 8, 0, 8, 0, 8),
                                                 (16, 8, 0, 16, 0, 8),
                                                 (32, 16, 0, 32, 0, 16),
-                                                (64, 16, 0, 64, 0, 16)],
-                              pool_sizes=[2, 2, 2, 2],
+                                                (32, 16, 0, 32, 0, 16),
+                                                (64, 32, 0, 64, 0, 32),
+                                                (64, 32, 0, 64, 0, 32)],
+                              pool_sizes=[2, 2, 0, 2, 0, 2],
                               n_hidden=512,
                               dropout_probability=0.5,
                               inception_dropout=0.2,
@@ -72,7 +73,7 @@ def main():
                                                                                               test_set,
                                                                                               valid_set)
         train_args['inputs']['batchsize'] = batch_size
-        train_args['inputs']['learningrate'] = 0.003
+        train_args['inputs']['learningrate'] = 0.002
         train_args['inputs']['beta1'] = 0.9
         train_args['inputs']['beta2'] = 1e-6
 
@@ -80,13 +81,13 @@ def main():
         validate_args['inputs']['batchsize'] = batch_size
 
         train = TrainModel(model=model,
-                           anneal_lr=0.90,
+                           anneal_lr=0.75,
                            anneal_lr_freq=50,
                            output_freq=1,
                            pickle_f_custom_freq=100,
                            f_custom_eval=None)
         train.pickle = False
-        train.add_initial_training_notes("Standardizing data before adding features")
+        train.add_initial_training_notes("Standardizing data after adding features")
         train.write_to_logger("Dataset: %s" % name)
         train.write_to_logger("LOO user: %d" % user)
         train.write_to_logger("Training samples: %d" % n_train)
@@ -107,7 +108,7 @@ def main():
                           n_train_batches=n_train_batches,
                           n_test_batches=n_test_batches,
                           n_valid_batches=n_valid_batches,
-                          n_epochs=300)
+                          n_epochs=500)
 
         # Reset logging
         handlers = train.logger.handlers[:]

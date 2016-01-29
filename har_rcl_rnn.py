@@ -30,7 +30,6 @@ def main():
     print("Resizing test set from %d to %d" % (test_set[0].shape[0], n_test*factor))
     test_set = (np.reshape(test_set[0][:factor*n_test], (n_test, sequence_length, n_features)),
                 np.reshape(test_set[1][:factor*n_test], (n_test, factor, n_classes)))
-
     valid_set = test_set
 
     n_train = train_set[0].shape[0]
@@ -50,8 +49,8 @@ def main():
                     filter_sizes=[3]*n_conv,
                     pool_sizes=[2]*n_conv,
                     n_hidden=[100],
-                    conv_dropout=0.3,
-                    rcl=[3, 3, 3, 3],
+                    conv_dropout=0.4,
+                    rcl=[3, 3, 3, 3, 3],
                     rcl_dropout=0.4,
                     dropout_probability=0.5,
                     n_out=n_classes,
@@ -78,7 +77,7 @@ def main():
     model.log += "\nSequence length: %d" % (sequence_length/factor)
     model.log += "\nTime steps: %d" % factor
     model.log += "\nStep: %d" % step
-    model.log += "\nShuffle %s" % shuffle
+    model.log += "\nShuffle: %s" % shuffle
     model.log += "\nAdd pitch: %s\nAdd roll: %s" % (add_pitch, add_roll)
     model.log += "\nAdd filter separated signals: %s" % add_filter
     model.log += "\nTransfer function: %s" % model.transf

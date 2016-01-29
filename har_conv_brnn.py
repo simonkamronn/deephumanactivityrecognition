@@ -1,6 +1,6 @@
 from models.conv_brnn import conv_BRNN
 from training.train import TrainModel
-from lasagne.nonlinearities import rectify, softmax, leaky_rectify
+from lasagne.nonlinearities import rectify, softmax, leaky_rectify, softplus
 import load_data as ld
 import numpy as np
 from sklearn.cross_validation import LeaveOneLabelOut
@@ -12,7 +12,7 @@ from os import rmdir
 
 def main():
     add_pitch, add_roll, add_filter = False, False, True
-    n_samples, step = 200, 40
+    n_samples, step = 100, 50
     shuffle = False
     batch_size = 64
     (train_set, test_set, valid_set, (sequence_length, n_features, n_classes)), name, users = \
@@ -66,9 +66,9 @@ def main():
         model = conv_BRNN(n_in=(sequence_length, n_features),
                           n_filters=[64]*n_conv,
                           filter_sizes=[3]*n_conv,
-                          pool_sizes=[0, 2]*(n_conv/2),
-                          n_hidden=[100],
-                          conv_dropout=0.1,
+                          pool_sizes=[1, 2, 1, 2, 2, 2],
+                          n_hidden=[200],
+                          conv_dropout=0.2,
                           dropout_probability=0.5,
                           n_out=n_classes,
                           downsample=1,
@@ -91,7 +91,7 @@ def main():
         train_args['inputs']['batchsize'] = batch_size
         train_args['inputs']['learningrate'] = 0.003
         train_args['inputs']['beta1'] = 0.9
-        train_args['inputs']['beta2'] = 1e-6
+        train_args['inputs']['beta2'] = 0.999
 
         train = TrainModel(model=model,
                            anneal_lr=0.9,
@@ -99,7 +99,7 @@ def main():
                            output_freq=1,
                            pickle_f_custom_freq=100,
                            f_custom_eval=None)
-        train.pickle = True
+        train.pickle = False
         train.add_initial_training_notes("Standardizing data after adding features")
         train.write_to_logger("Dataset: %s" % name)
         train.write_to_logger("LOO user: %d" % user)

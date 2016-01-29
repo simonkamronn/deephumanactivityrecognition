@@ -5,12 +5,12 @@ from scipy.signal import butter, lfilter
 
 def roll(data):
     x, y, z = np.transpose(data)
-    return np.arctan(y/np.sqrt(x**2 + z**2)).reshape((len(x), 1))
+    return np.reshape(np.arctan2(y, z), (len(x), 1))
 
 
 def pitch(data):
     x, y, z = np.transpose(data)
-    return np.arctan(x/np.sqrt(y**2 + z**2)).reshape((len(x), 1))
+    return np.reshape(np.arctan2(-x, np.sqrt(y**2 + z**2)), (len(x), 1))
 
 
 def magnitude(x_in):
@@ -29,7 +29,7 @@ def spectrogram_3d(data):
     n_win, n_samples, n_fea = data.shape
     nfft = 128
     noverlap = nfft - n_samples/n_bins
-    # X = magnitude(np.swapaxes(X[:, 0:3, :], 1, 2).reshape(-1, 3))
+    # X = comp_magnitude(np.swapaxes(X[:, 0:3, :], 1, 2).reshape(-1, 3))
     # X = 10. * np.log10(specgram(np.pad(X, pad_width=nfft/2-1, mode='constant'), nfft=nfft, noverlap=noverlap)[0])
     # X = X.reshape(nfft/2+1, 1, n_win, n_samples/(nfft-noverlap)).swapaxes(0, 2)[:, :, :nfft/2]
 
@@ -87,6 +87,16 @@ def split_signal(data, fs, cutoff=0.1, order=2):
     return lp_sig
 
 
+def lowpass_filter(data, fs, cutoff=10, order=2):
+    n_win, n_samples, n_dim = data.shape
+    tmp = np.reshape(data, (n_win*n_samples, n_dim))
+    normal_cutoff = cutoff / (0.5 * fs)
+    b, a = butter(order, normal_cutoff, 'low', analog=False)
+    lp_sig = lfilter(b, a, tmp, axis=0).reshape(n_win, -1, n_dim)
+
+    return lp_sig
+
+
 def wavelet_decomp(data, level=3):
     pass
 
@@ -107,7 +117,7 @@ def rolling_window(a, window, step=1):
     if not hasattr(window, '__iter__'):
         return rolling_window_lastaxis(a, window, step)
     for i, win in enumerate(window):
-        if win > 1:
+        if 1 < win < a.shape[0]:
             a = a.swapaxes(i, -1)
             a = rolling_window_lastaxis(a, win, step)
             a = a.swapaxes(-2, i)
@@ -146,7 +156,7 @@ def downsample(data, ratio=2):
     return data
 
 
-def window_segment(data, window = 64):
+def window_segment(data, window=64):
     # Segment in windows on axis 1
     n_samp, n_dim = data.shape
     n_win = n_samp//(window)

@@ -9,6 +9,7 @@ import time
 import datetime
 from os import rmdir
 
+
 def run_cnn():
     add_pitch, add_roll, add_filter = False, False, True
     n_samples, step = 200, 100
@@ -24,7 +25,6 @@ def run_cnn():
     d = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d%H%M%S'))
     lol = LeaveOneLabelOut(users)
     user = 0
-    eval_validation = np.empty((0, 2))
     for train_index, test_index in lol:
         user += 1
         X_train, X_test = X[train_index], X[test_index]
@@ -32,6 +32,7 @@ def run_cnn():
 
         train_set = (X_train, y_train)
         test_set = (X_test, y_test)
+        valid_set = test_set
 
         n_train = train_set[0].shape[0]
         n_test = test_set[0].shape[0]
@@ -41,11 +42,9 @@ def run_cnn():
         n_valid_batches = n_test//batch_size
 
         print("n_train_batches: %d, n_test_batches: %d" % (n_train_batches, n_test_batches))
-
-
         model = CNN(n_in=(sequence_length, n_features),
                     n_filters=[64, 64, 64, 64],
-                    filter_sizes=[3, 3, 3, 3],
+                    filter_sizes=[5, 5, 3, 3],
                     pool_sizes=[2, 2, 2, 2],
                     conv_dropout=0.2,
                     n_hidden=[512],

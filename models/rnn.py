@@ -13,8 +13,8 @@ GRAD_CLIP = 5
 
 
 class RNN(Model):
-    def __init__(self, n_in, n_hidden, n_out, downsample=1, ccf=False, grad_clip=GRAD_CLIP, peepholes=False,
-                 trans_func=rectify, out_func=softmax, batch_size=100, dropout_probability=0.0):
+    def __init__(self, n_in, n_hidden, n_out, ccf=False, grad_clip=GRAD_CLIP, peepholes=False,
+                 trans_func=rectify, out_func=softmax, dropout_probability=0.0):
         super(RNN, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.outf = out_func
         self.log = ""
@@ -24,24 +24,18 @@ class RNN(Model):
 
         # Overwrite input layer
         sequence_length, n_features = n_in
-        self.l_in = InputLayer(shape=(batch_size, sequence_length, n_features))
+        self.l_in = InputLayer(shape=(None, sequence_length, n_features))
         l_prev = self.l_in
-
-        # Downsample input
-        if downsample > 1:
-            self.log += "\nDownsampling with a factor of %d" % downsample
-            l_prev = lasagne.layers.FeaturePoolLayer(l_prev, pool_size=downsample, pool_function=T.mean)
-            sequence_length /= downsample
 
         if ccf:
             self.log += "\nAdding cross-channel feature layer"
-            l_prev = lasagne.layers.ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features))
+            l_prev = lasagne.layers.ReshapeLayer(l_prev, (-1, 1, sequence_length, n_features))
             l_prev = lasagne.layers.Conv2DLayer(l_prev,
                                                 num_filters=n_features*3,
                                                 filter_size=(1, n_features),
                                                 nonlinearity=None)
             n_features *= 3
-            l_prev = lasagne.layers.ReshapeLayer(l_prev, (batch_size, n_features, sequence_length))
+            l_prev = lasagne.layers.ReshapeLayer(l_prev, (-1, n_features, sequence_length))
             l_prev = lasagne.layers.DimshuffleLayer(l_prev, (0, 2, 1))
 
         print("LSTM input shape", get_output_shape(l_prev))
@@ -109,10 +103,9 @@ class RNN(Model):
         super(RNN, self).build_model(train_set, test_set, validation_set)
 
         epsilon = 1e-8
-        loss_cc = aggregate(categorical_crossentropy(
-            T.clip(get_output(self.model, self.sym_x), epsilon, 1),
-            self.sym_t
-        ), mode='mean')
+        y_train = T.clip(get_output(self.model, self.sym_x), epsilon, 1)
+        loss_cc = aggregate(categorical_crossentropy(y_train, self.sym_t), mode='mean')
+        loss_train_acc = categorical_accuracy(y_train, self.sym_t).mean()
 
         y = T.clip(get_output(self.model, self.sym_x, deterministic=True), epsilon, 1)
         loss_eval = aggregate(categorical_crossentropy(y, self.sym_t), mode='mean')
@@ -123,11 +116,11 @@ class RNN(Model):
         sym_beta2 = T.scalar('beta2')
         grads = T.grad(loss_cc, all_params)
         grads = [T.clip(g, -5, 5) for g in grads]
-        updates = adam(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
+        updates = rmsprop(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
 
         inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2]
         f_train = theano.function(
-            inputs, [loss_cc],
+            inputs, [loss_cc, loss_train_acc],
             updates=updates,
             givens={
                 self.sym_x: self.sh_train_x[self.batch_slice],
@@ -136,7 +129,7 @@ class RNN(Model):
         )
 
         f_test = theano.function(
-            [self.sym_index, self.sym_batchsize], [loss_eval],
+            [self.sym_index, self.sym_batchsize], [loss_eval, loss_acc],
             givens={
                 self.sym_x: self.sh_test_x[self.batch_slice],
                 self.sym_t: self.sh_test_t[self.batch_slice],
@@ -153,19 +146,24 @@ class RNN(Model):
                 },
             )
 
-        self.train_args['inputs']['batchsize'] = 128
+        self.train_args['inputs']['batchsize'] = 64
         self.train_args['inputs']['learningrate'] = 1e-3
         self.train_args['inputs']['beta1'] = 0.9
-        self.train_args['inputs']['beta2'] = 0.999
+        self.train_args['inputs']['beta2'] = 1e-6
         self.train_args['outputs']['loss_cc'] = '%0.6f'
+        self.train_args['outputs']['loss_train_acc'] = '%0.6f'
 
-        self.test_args['inputs']['batchsize'] = 128
+        self.test_args['inputs']['batchsize'] = 64
         self.test_args['outputs']['loss_eval'] = '%0.6f'
+        self.test_args['outputs']['loss_acc'] = '%0.6f'
 
-        self.validate_args['inputs']['batchsize'] = 128
-        self.validate_args['outputs']['loss_eval'] = '%0.6f'
-        self.validate_args['outputs']['loss_acc'] = '%0.6f%%'
+        self.validate_args['inputs']['batchsize'] = 64
+        # self.validate_args['outputs']['loss_eval'] = '%0.6f'
+        # self.validate_args['outputs']['loss_acc'] = '%0.6f'
         return f_train, f_test, f_validate, self.train_args, self.test_args, self.validate_args
 
     def model_info(self):
         return self.log
+
+    def get_output(self, x):
+        return get_output(self.model, x, deterministic=True)

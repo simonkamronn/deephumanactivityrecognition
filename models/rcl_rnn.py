@@ -50,7 +50,7 @@ class RCL_RNN(Model):
                 self.log += "\nAdding output dropout: %.2f" % conv_dropout
         print("Conv out shape", get_output_shape(l_prev))
 
-                # Recurrent Convolutional layers
+        # Recurrent Convolutional layers
         filter_size = filter_sizes[0]
         for t in rcl:
             self.log += "\nAdding recurrent conv layer: t: %d, filter size: %s" % (t, filter_size)
@@ -72,7 +72,7 @@ class RCL_RNN(Model):
         l_prev = GlobalPoolLayer(l_prev, pool_function=T.max)
         l_prev = ReshapeLayer(l_prev, (batch_size, factor, -1))
 
-        # Add BLSTM layers
+        # Add LSTM layers
         print("LSTM input shape", get_output_shape(l_prev))
         for n_hid in n_hidden:
             self.log += "\nAdding LSTM layer with %d units" % n_hid

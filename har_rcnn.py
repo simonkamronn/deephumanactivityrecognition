@@ -1,18 +1,20 @@
+import datetime
+import time
+from os import rmdir
+
+import matplotlib.pyplot as plt
+import numpy as np
+from lasagne.layers import get_all_layers, get_output_shape
+from lasagne.nonlinearities import rectify, softmax
+from sklearn.cross_validation import LeaveOneLabelOut
+from sklearn.metrics import confusion_matrix
+from sklearn.preprocessing import StandardScaler
+
+from data_preparation.load_data import LoadHAR, one_hot, ACTIVITY_MAP
+from lasagne_extensions.confusionmatrix import ConfusionMatrix
 from models.rcnn import RCNN
 from training.train import TrainModel
-from lasagne.nonlinearities import rectify, softmax, leaky_rectify
-from lasagne.layers import get_all_layers, get_output_shape
-from load_data import LoadHAR, one_hot, ACTIVITY_MAP
-from sklearn.cross_validation import LeaveOneLabelOut
-import numpy as np
 from utils import env_paths as paths
-import time
-import datetime
-from os import rmdir
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import confusion_matrix
-from lasagne_extensions.confusionmatrix import ConfusionMatrix
-import matplotlib.pyplot as plt
 
 
 def main():
@@ -23,7 +25,7 @@ def main():
     batch_size = 64
 
     # Define datasets and load iteratively
-    datasets = [load_data.uci_mhealth, load_data.wisdm1, load_data.uci_hapt, load_data.idash]
+    datasets = [load_data.uci_mhealth, load_data.wisdm1, load_data.wisdm2, load_data.uci_hapt, load_data.idash]
     X, y, name, users = datasets[0]()
     users = ['%s_%d' % (name, user) for user in users]
     for dataset in datasets[1:]:
@@ -98,14 +100,14 @@ def main():
                      ccf=False,
                      trans_func=rectify,
                      out_func=softmax,
-                     batch_size=batch_size,
                      batch_norm=True)
 
-        # Generate root path and edit
-        root_path = model.get_root_path()
-        model.root_path = "%s_cv_%s_%s" % (root_path, d, user)
-        paths.path_exists(model.root_path)
-        rmdir(root_path)
+        if len(lol) > 1:
+            # Generate root path and edit
+            root_path = model.get_root_path()
+            model.root_path = "%s_cv_%s_%s" % (root_path, d, user)
+            paths.path_exists(model.root_path)
+            rmdir(root_path)
 
         f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
                                                                                               test_set,
@@ -141,8 +143,8 @@ def main():
                            anneal_lr_freq=50,
                            output_freq=1,
                            pickle_f_custom_freq=100,
-                           f_custom_eval=f_custom)
-        train.pickle = True
+                           f_custom_eval=None)
+        train.pickle = False
 
         train.add_initial_training_notes("Standardizing data after adding features")
         train.write_to_logger("Dataset: %s" % name)

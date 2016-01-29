@@ -1,24 +1,18 @@
 import theano
 theano.config.floatX = 'float32'
 import theano.tensor as T
-import lasagne
 from base import Model
-from lasagne_extensions.nonlinearities import rectify, softmax, leaky_rectify, very_leaky_rectify
+from lasagne_extensions.nonlinearities import rectify, softmax, leaky_rectify
 from lasagne.layers import get_output, get_output_shape, DenseLayer, DropoutLayer, InputLayer, FeaturePoolLayer, \
-    ReshapeLayer, DimshuffleLayer, get_all_params, ElemwiseSumLayer, Conv2DLayer, Pool2DLayer, NonlinearityLayer, \
-    BiasLayer, GlobalPoolLayer
+    ReshapeLayer, DimshuffleLayer, get_all_params, Conv2DLayer, Pool2DLayer, GlobalPoolLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
-# from lasagne.layers.dnn import Conv2DDNNLayer as
-# from lasagne.layers.dnn import Pool2DDNNLayer as
-from lasagne_extensions.layers.batch_norm import BatchNormLayer
 from lasagne_extensions.updates import adam, rmsprop
-
-std = 0.02
+from modules import RecurrentConvLayer, BatchNormalizeLayer
 
 
 class RCNN(Model):
     def __init__(self, n_in, n_filters, filter_sizes, n_out, pool_sizes=None, n_hidden=(), downsample=1, ccf=False,
-                 rcl=(), rcl_dropout=0.0, trans_func=rectify, out_func=softmax, batch_size=100, dropout_probability=0.0,
+                 rcl=(), rcl_dropout=0.0, trans_func=rectify, out_func=softmax, dropout_probability=0.0,
                  batch_norm=False):
         super(RCNN, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.outf = out_func
@@ -29,8 +23,9 @@ class RCNN(Model):
 
         # Overwrite input layer
         sequence_length, n_features = n_in
-        self.l_in = InputLayer(shape=(batch_size, sequence_length, n_features), name='Input')
+        self.l_in = InputLayer(shape=(None, sequence_length, n_features), name='Input')
         l_prev = self.l_in
+        print("Input shape: ", get_output_shape(l_prev))
 
         # Input noise
         # sigma = 0.2
@@ -45,7 +40,7 @@ class RCNN(Model):
 
         if ccf:
             self.log += "\nAdding cross-channel feature layer"
-            l_prev = ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features), name='Reshape')
+            l_prev = ReshapeLayer(l_prev, (-1, 1, sequence_length, n_features), name='Reshape')
             l_prev = Conv2DLayer(l_prev,
                                  num_filters=4*n_features,
                                  filter_size=(1, n_features),
@@ -54,11 +49,11 @@ class RCNN(Model):
                                  name='Conv2D')
             l_prev = BatchNormalizeLayer(l_prev, normalize=batch_norm, nonlinearity=self.transf)
             n_features *= 4
-            l_prev = ReshapeLayer(l_prev, (batch_size, n_features, sequence_length), name='Reshape')
+            l_prev = ReshapeLayer(l_prev, (-1, n_features, sequence_length), name='Reshape')
             l_prev = DimshuffleLayer(l_prev, (0, 2, 1), name='Dimshuffle')
 
         # Convolutional layers
-        l_prev = ReshapeLayer(l_prev, (batch_size, 1, sequence_length, n_features), name='Reshape')
+        l_prev = ReshapeLayer(l_prev, (-1, 1, sequence_length, n_features), name='Reshape')
         l_prev = DimshuffleLayer(l_prev, (0, 3, 2, 1), name='Dimshuffle')
         for n_filter, filter_size, pool_size in zip(n_filters, filter_sizes, pool_sizes):
             self.log += "\nAdding 2D conv layer: %d x %d" % (n_filter, filter_size)
@@ -90,7 +85,7 @@ class RCNN(Model):
             l_prev = Pool2DLayer(l_prev, pool_size=(2, 1), name='Max Pool')
             # if rcl_dropout > 0.0:
             #     self.log += "\nAdding dropout layer: %.2f" % rcl_dropout
-            #     l_prev = DropoutLayer(l_prev, p=rcl_dropout, name='Dropout')
+            #     l_prev = DropoutLayer(l_prev, p_in=rcl_dropout, name='Dropout')
             print("RCL out shape", get_output_shape(l_prev))
 
         l_prev = GlobalPoolLayer(l_prev, name='Global Max Pool')
@@ -117,10 +112,9 @@ class RCNN(Model):
         super(RCNN, self).build_model(train_set, test_set, validation_set)
 
         epsilon = 1e-8
-        loss_cc = aggregate(categorical_crossentropy(
-            T.clip(get_output(self.model, self.sym_x), epsilon, 1),
-            self.sym_t
-        ), mode='mean')
+        y_train = T.clip(get_output(self.model, self.sym_x), epsilon, 1)
+        loss_cc = aggregate(categorical_crossentropy(y_train, self.sym_t), mode='mean')
+        loss_train_acc = categorical_accuracy(y_train, self.sym_t).mean()
 
         y = T.clip(get_output(self.model, self.sym_x, deterministic=True), epsilon, 1)
         loss_eval = aggregate(categorical_crossentropy(y, self.sym_t), mode='mean')
@@ -135,7 +129,7 @@ class RCNN(Model):
 
         inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2]
         f_train = theano.function(
-            inputs, [loss_cc],
+            inputs, [loss_cc, loss_train_acc],
             updates=updates,
             givens={
                 self.sym_x: self.sh_train_x[self.batch_slice],
@@ -144,7 +138,7 @@ class RCNN(Model):
         )
 
         f_test = theano.function(
-            [self.sym_index, self.sym_batchsize], [loss_eval],
+            [self.sym_index, self.sym_batchsize], [loss_eval, loss_acc],
             givens={
                 self.sym_x: self.sh_test_x[self.batch_slice],
                 self.sym_t: self.sh_test_t[self.batch_slice],
@@ -166,57 +160,19 @@ class RCNN(Model):
         self.train_args['inputs']['beta1'] = 0.9
         self.train_args['inputs']['beta2'] = 0.999
         self.train_args['outputs']['loss_cc'] = '%0.6f'
+        self.train_args['outputs']['loss_train_acc'] = '%0.6f'
 
         self.test_args['inputs']['batchsize'] = 128
         self.test_args['outputs']['loss_eval'] = '%0.6f'
+        self.test_args['outputs']['loss_acc'] = '%0.6f'
 
         self.validate_args['inputs']['batchsize'] = 128
-        self.validate_args['outputs']['loss_eval'] = '%0.6f'
-        self.validate_args['outputs']['loss_acc'] = '%0.6f%%'
+        # self.validate_args['outputs']['loss_eval'] = '%0.6f'
+        # self.validate_args['outputs']['loss_acc'] = '%0.6f'
         return f_train, f_test, f_validate, self.train_args, self.test_args, self.validate_args
 
     def model_info(self):
         return self.log
 
-
-def RecurrentConvLayer(input_layer, t=3, num_filters=64, filter_size=7, nonlinearity=leaky_rectify, normalize=False, rcl_dropout=0.0):
-    input_conv = Conv2DLayer(incoming=input_layer,
-                             num_filters=num_filters,
-                             filter_size=(1, 1),
-                             stride=(1, 1),
-                             pad='same',
-                             #W=lasagne.init.GlorotNormal(),
-                             W=lasagne.init.Normal(std=std),
-                             nonlinearity=None,
-                             b=None,
-                             name='RCL Conv2D input')
-    l_prev = BatchNormalizeLayer(input_conv, normalize=normalize, nonlinearity=nonlinearity)
-    l_prev = DropoutLayer(l_prev, p=rcl_dropout, name='Recurrent conv dropout')
-
-    for _ in range(t):
-        l_prev = Conv2DLayer(incoming=l_prev,
-                             num_filters=num_filters,
-                             filter_size=(filter_size, 1),
-                             stride=(1, 1),
-                             pad='same',
-                             #W=lasagne.init.GlorotNormal(),
-                             W=lasagne.init.Normal(std=std),
-                             nonlinearity=None,
-                             b=None,
-                             name='Conv2D t=%d' % _)
-        l_prev = ElemwiseSumLayer((input_conv, l_prev), coeffs=1, name='Sum')
-        l_prev = BatchNormalizeLayer(l_prev, normalize=normalize, nonlinearity=nonlinearity)
-        l_prev = DropoutLayer(l_prev, p=rcl_dropout, name='Recurrent conv dropout')
-    return l_prev
-
-
-def BatchNormalizeLayer(l_prev, normalize=False, nonlinearity=rectify):
-    if normalize:
-        # l_prev = NormalizeLayer(l_prev, alpha='single_pass')
-        # l_prev = ScaleAndShiftLayer(l_prev)
-        # l_prev = NonlinearityLayer(l_prev, nonlinearity=nonlinearity)
-        l_prev = BatchNormLayer(l_prev, nonlinearity=nonlinearity, name='Batch norm')
-    else:
-        l_prev = NonlinearityLayer(l_prev, nonlinearity=nonlinearity, name='Non-linearity')
-        l_prev = BiasLayer(l_prev, name='Bias')
-    return l_prev
+    def get_output(self, x):
+        return get_output(self.model, x, deterministic=True)

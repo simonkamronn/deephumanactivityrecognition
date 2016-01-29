@@ -1,41 +1,35 @@
-import theano.sandbox.cuda
-theano.sandbox.cuda.use('gpu0')
-
-from models.conv_rnn import conv_RNN
+from models.convrnn import convRNN
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify
-import load_data as ld
+from data_preparation.load_data import LoadHAR, ACTIVITY_MAP
 import numpy as np
 from sklearn.cross_validation import LeaveOneLabelOut
 from utils import env_paths as paths
-import cPickle as pkl
 import time
 import datetime
 from os import rmdir
+from har_utils import one_hot
 
 
 def main():
     add_pitch, add_roll, add_filter = False, False, True
-    n_samples, step = 200, 100
-    shuffle = False
-    batch_size = 64
-    (train_set, test_set, valid_set, (sequence_length, n_features, n_classes)), name, users = \
-        ld.LoadHAR().uci_hapt(add_pitch=add_pitch, add_roll=add_roll, add_filter=add_filter,
-                              n_samples=n_samples, step=step, shuffle=shuffle)
+    n_samples, step = 200, 200
+    load_data = LoadHAR(add_pitch=add_pitch, add_roll=add_roll, add_filter=add_filter,
+                        n_samples=n_samples, step=step)
 
+    X, y, name, users = load_data.idash()
+
+    n_windows, sequence_length, n_features = X.shape
+    y = one_hot(y, n_classes=len(ACTIVITY_MAP))
+    n_classes = y.shape[-1]
     # The data is structured as (samples, sequence, features) but to properly use the convolutional RNN we need a longer
     # time
-    factor = 3
+    factor = 5
     sequence_length *= factor
 
-    # Concat train and test data
-    X = np.concatenate((train_set[0], test_set[0]), axis=0)
-    y = np.concatenate((train_set[1], test_set[1]), axis=0)
-
-    d = datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d%H%M%S')
+    d = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d%H%M%S'))
     lol = LeaveOneLabelOut(users)
     user = 0
-    eval_validation = np.empty((0, 2))
     for train_index, test_index in lol:
         user += 1
         X_train, X_test = X[train_index], X[test_index]
@@ -68,29 +62,27 @@ def main():
               % (n_train_batches, n_test_batches, n_valid_batches))
 
         n_conv = 5
-        model = conv_RNN(n_in=(sequence_length, n_features),
-                         n_filters=[64]*n_conv,
-                         filter_sizes=[3]*n_conv,
-                         pool_sizes=[2]*n_conv,
-                         n_hidden=[100],
-                         conv_dropout=0.1,
-                         dropout_probability=0.5,
-                         n_out=n_classes,
-                         downsample=1,
-                         trans_func=rectify,
-                         out_func=softmax,
-                         batch_size=batch_size,
-                         factor=factor)
+        model = convRNN(n_in=(sequence_length, n_features),
+                        n_filters=[64]*n_conv,
+                        filter_sizes=[3]*n_conv,
+                        pool_sizes=[1, 2, 1, 2, 2],
+                        n_hidden=[50, 50],
+                        conv_dropout=0.0,
+                        output_dropout=0.5,
+                        n_out=n_classes,
+                        trans_func=rectify,
+                        out_func=softmax,
+                        factor=factor)
 
         # Generate root path and edit
         root_path = model.get_root_path()
-        model.root_path = "%s_cv_%s_%d" % (root_path, d, user)
+        model.root_path = "%s_cv_%s_%s%02d" % (root_path, d, name, user)
         paths.path_exists(model.root_path)
         rmdir(root_path)
 
         f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
                                                                                               test_set,
-                                                                                              valid_set)
+                                                                                              None)
         test_args['inputs']['batchsize'] = batch_size
         validate_args['inputs']['batchsize'] = batch_size
         train_args['inputs']['batchsize'] = batch_size
@@ -99,13 +91,13 @@ def main():
         train_args['inputs']['beta2'] = 1e-6
 
         train = TrainModel(model=model,
-                           anneal_lr=0.9,
-                           anneal_lr_freq=100,
+                           anneal_lr=0.75,
+                           anneal_lr_freq=50,
                            output_freq=1,
                            pickle_f_custom_freq=100,
                            f_custom_eval=None)
-        train.pickle = True
-        train.add_initial_training_notes("Standardizing data before adding features")
+        train.pickle = False
+        train.add_initial_training_notes("Standardizing data after adding features. Striding instead of pooling.")
         train.write_to_logger("Dataset: %s" % name)
         train.write_to_logger("LOO user: %d" % user)
         train.write_to_logger("Training samples: %d" % n_train)
@@ -113,7 +105,7 @@ def main():
         train.write_to_logger("Sequence length: %d" % (sequence_length/factor))
         train.write_to_logger("Step: %d" % step)
         train.write_to_logger("Time steps: %d" % factor)
-        train.write_to_logger("Shuffle: %s" % shuffle)
+        train.write_to_logger("Shuffle: %s" % False)
         train.write_to_logger("Add pitch: %s\nAdd roll: %s" % (add_pitch, add_roll))
         train.write_to_logger("Add filter separated signals: %s" % add_filter)
         train.write_to_logger("Transfer function: %s" % model.transf)
@@ -124,7 +116,7 @@ def main():
                           n_train_batches=n_train_batches,
                           n_test_batches=n_test_batches,
                           n_valid_batches=n_valid_batches,
-                          n_epochs=300)
+                          n_epochs=500)
 
         # Reset logging
         handlers = train.logger.handlers[:]

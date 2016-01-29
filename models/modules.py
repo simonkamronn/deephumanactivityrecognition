@@ -3,6 +3,7 @@ from lasagne.layers import NonlinearityLayer, BiasLayer, NINLayer, MaxPool2DLaye
     ElemwiseSumLayer, DropoutLayer
 from lasagne.nonlinearities import rectify
 from lasagne_extensions.layers.batch_norm import BatchNormLayer
+from lasagne_extensions.layers import TiedDropoutLayer
 
 
 def inception_module(l_in, num_1x1, num_3x1_proj, reduce_3x1, num_3x1, reduce_5x1, num_5x1,
@@ -71,7 +72,7 @@ def inception_module(l_in, num_1x1, num_3x1_proj, reduce_3x1, num_3x1, reduce_5x
     return l_out
 
 
-def ResidualModule(input_layer, num_filters=64, nonlinearity=rectify, normalize=False, stride=(1, 1)):
+def ResidualModule(input_layer, num_filters=64, nonlinearity=rectify, normalize=False, stride=(1, 1), conv_dropout=0.0):
     input_conv = Conv2DLayer(incoming=input_layer,
                              num_filters=num_filters,
                              filter_size=(3, 1),
@@ -82,6 +83,7 @@ def ResidualModule(input_layer, num_filters=64, nonlinearity=rectify, normalize=
                              b=None,
                              name='Residual module layer 1')
     l_prev = BatchNormalizeLayer(input_conv, normalize=normalize, nonlinearity=nonlinearity)
+    l_prev = TiedDropoutLayer(l_prev, p=conv_dropout, name='Tied Dropout')
 
     l_prev = Conv2DLayer(incoming=l_prev,
                          num_filters=num_filters,
@@ -102,10 +104,12 @@ def ResidualModule(input_layer, num_filters=64, nonlinearity=rectify, normalize=
                          nonlinearity=None, b=None, name='Shortcut')
     l_prev = ElemwiseSumLayer((l_prev, l_skip), name='Elementwise sum')
 
-    # Add nonlinearity and potentially bias after summation
+    # Add nonlinearity after summation
     l_prev = NonlinearityLayer(l_prev, nonlinearity=nonlinearity, name='Non-linearity')
     if not normalize:
         l_prev = BiasLayer(l_prev, name='Bias')
+
+    l_prev = TiedDropoutLayer(l_prev, p=conv_dropout, name='Tied Dropout')
     return l_prev
 
 
