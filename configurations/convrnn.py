@@ -1,4 +1,5 @@
-from os import rmdir
+from os import rmdir, path
+import shutil
 from lasagne.nonlinearities import leaky_rectify, rectify, softmax
 from base import ModelConfiguration
 from data_preparation.load_data import LoadHAR
@@ -44,13 +45,13 @@ def main():
                         n_filters=[32, 32],
                         filter_sizes=[3]*2,
                         pool_sizes=[2, 2],
-                        n_hidden=[100, 10, 100],
+                        n_hidden=[100, 100, 100],
                         conv_dropout=0.3,
                         rnn_in_dropout=0.0,
                         rnn_hid_dropout=0.0,
                         output_dropout=0.5,
                         n_out=conf.n_classes,
-                        trans_func=rectify,
+                        trans_func=leaky_rectify,
                         out_func=softmax,
                         factor=factor,
                         stats=conf.stats)
@@ -68,6 +69,10 @@ def main():
             paths.path_exists(model.root_path)
             rmdir(root_path)
 
+        scriptpath = path.realpath(__file__)
+        filename = path.basename(scriptpath)
+        shutil.copy(scriptpath, model.root_path + '/' + filename)
+
         train = TrainModel(model=model,
                            anneal_lr=0.8,
                            anneal_lr_freq=50,
@@ -80,7 +85,7 @@ def main():
         conf.run(train_index,
                  test_index,
                  lr=0.003,
-                 n_epochs=1000,
+                 n_epochs=500,
                  model=model,
                  train=train,
                  load_data=load_data,
