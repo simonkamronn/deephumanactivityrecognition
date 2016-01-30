@@ -1,6 +1,6 @@
 import lasagne
 from lasagne.layers import NonlinearityLayer, BiasLayer, NINLayer, MaxPool2DLayer, Conv2DLayer, ConcatLayer, \
-    ElemwiseSumLayer, DropoutLayer
+    ElemwiseSumLayer
 from lasagne.nonlinearities import rectify
 from lasagne_extensions.layers.batch_norm import BatchNormLayer
 from lasagne_extensions.layers import TiedDropoutLayer
@@ -125,7 +125,7 @@ def RecurrentConvLayer(input_layer, t=3, num_filters=64, filter_size=7, nonlinea
                              b=None,
                              name='RCL Conv2D input')
     l_prev = BatchNormalizeLayer(input_conv, normalize=normalize, nonlinearity=nonlinearity)
-    l_prev = DropoutLayer(l_prev, p=rcl_dropout, name='Recurrent conv dropout')
+    l_prev = TiedDropoutLayer(l_prev, p=rcl_dropout, name='Recurrent conv dropout')
 
     for _ in range(t):
         l_prev = Conv2DLayer(incoming=l_prev,
@@ -139,7 +139,7 @@ def RecurrentConvLayer(input_layer, t=3, num_filters=64, filter_size=7, nonlinea
                              name='Conv2D t=%d' % _)
         l_prev = ElemwiseSumLayer((input_conv, l_prev), coeffs=1, name='Sum')
         l_prev = BatchNormalizeLayer(l_prev, normalize=normalize, nonlinearity=nonlinearity)
-        l_prev = DropoutLayer(l_prev, p=rcl_dropout, name='Recurrent conv dropout')
+        l_prev = TiedDropoutLayer(l_prev, p=rcl_dropout, name='Recurrent conv dropout')
     return l_prev
 
 

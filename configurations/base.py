@@ -55,6 +55,11 @@ class ModelConfiguration(object):
         users = np.char.asarray(users)[limited_labels]
         self.log += '\nRemaining: %d samples' % np.sum(limited_labels)
 
+        # Compress labels
+        for idx, label in enumerate(np.unique(y)):
+            if not np.equal(idx, label):
+                y[y == label] = idx
+
         # One hot encoding of labels
         y = one_hot(y)
 
@@ -137,7 +142,7 @@ class ModelConfiguration(object):
         train_args['inputs']['batchsize'] = batch_size
         train_args['inputs']['learningrate'] = lr
         train_args['inputs']['beta1'] = 0.9
-        train_args['inputs']['beta2'] = 1e-6
+        train_args['inputs']['beta2'] = 0.999
         validate_args['inputs']['batchsize'] = batch_size
 
         train.add_initial_training_notes("Standardizing data after adding features")

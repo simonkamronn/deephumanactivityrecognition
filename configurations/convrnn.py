@@ -5,18 +5,17 @@ from data_preparation.load_data import LoadHAR
 from models.convrnn import convRNN
 from training.train import TrainModel
 from utils import env_paths as paths
-from sklearn.cross_validation import LeavePLabelOut, StratifiedKFold, StratifiedShuffleSplit
+from sklearn.cross_validation import LeavePLabelOut, StratifiedKFold, StratifiedShuffleSplit, ShuffleSplit
 import numpy as np
-
 
 def main():
     n_samples, step = 50, 50
-    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=True, n_samples=n_samples,
-                        step=step, normalize=True, comp_magnitude=False)
+    load_data = LoadHAR(add_pitch=True, add_roll=True, add_filter=False, n_samples=n_samples,
+                        step=step, normalize=True, comp_magnitude=False, simple_labels=True, common_labels=False)
     factor = 10
 
     conf = ModelConfiguration()
-    conf.load_datasets([load_data.uci_hapt], label_limit=100)
+    conf.load_datasets([load_data.uci_hapt], label_limit=6)
 
     user_idx = -1
     user = None  # 'UCI HAPT10'
@@ -30,10 +29,13 @@ def main():
         # conf.cv = LeavePLabelOut(conf.users, p=1)
 
         # Divide into K folds balanced on labels
-        # conf.cv = StratifiedKFold(np.argmax(conf.y, axis=1), n_folds=10)
+        # conf.cv = StratifiedKFold(conf.users, n_folds=10)
 
         # And shuffle
-        conf.cv = StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=1, test_size=0.3, random_state=0)
+        conf.cv = StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=1, test_size=0.1, random_state=None)
+
+        # Pure shuffle
+        # conf.cv = ShuffleSplit(conf.y.shape[0], n_iter=2, test_size=0.1)
 
     for train_index, test_index in conf.cv:
         conf.user = user
@@ -42,8 +44,8 @@ def main():
                         n_filters=[32, 32],
                         filter_sizes=[3]*2,
                         pool_sizes=[2, 2],
-                        n_hidden=[100, 100],
-                        conv_dropout=0.1,
+                        n_hidden=[100, 10, 100],
+                        conv_dropout=0.3,
                         rnn_in_dropout=0.0,
                         rnn_hid_dropout=0.0,
                         output_dropout=0.5,
@@ -73,6 +75,7 @@ def main():
                            pickle_f_custom_freq=100,
                            f_custom_eval=None)
         train.pickle = False
+        train.write_to_logger("Using StratifiedShuffleSplit with n_iter=1, test_size=0.1, random_state=None")
 
         conf.run(train_index,
                  test_index,

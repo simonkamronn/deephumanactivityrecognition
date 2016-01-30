@@ -157,11 +157,11 @@ class LoadHAR(object):
 
         # Add features to data
         data_array, stats = self.add_features(data_array,
-                                       normalise=self.normalize,
-                                       add_roll=self.add_roll,
-                                       add_pitch=self.add_pitch,
-                                       add_filter=self.add_filter,
-                                       comp_magnitude=self.comp_magnitude)
+                                              normalise=self.normalize,
+                                              add_roll=self.add_roll,
+                                              add_pitch=self.add_pitch,
+                                              add_filter=self.add_filter,
+                                              comp_magnitude=self.comp_magnitude)
 
         # Convert to common labels
         if self.common_labels:

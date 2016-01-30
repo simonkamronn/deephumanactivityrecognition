@@ -1,4 +1,4 @@
-from models.inception_sequence import Inception_seq
+from models.inception_sequence import Incep
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify
 from lasagne.layers import get_all_layers, get_output_shape
@@ -41,22 +41,22 @@ def main():
         print("n_train_batches: %d, n_test_batches: %d" % (n_train_batches, n_test_batches))
 
         # num_1x1, num_2x1_proj, reduce_3x1, num_3x1, reduce_5x1, num_5x1
-        model = Inception_seq(n_in=(sequence_length, n_features),
-                              inception_layers=[(8, 8, 0, 8, 0, 8),
+        model = Incep(n_in=(sequence_length, n_features),
+                      inception_layers=[(8, 8, 0, 8, 0, 8),
                                                 (16, 8, 0, 16, 0, 8),
                                                 (32, 16, 0, 32, 0, 16),
                                                 (32, 16, 0, 32, 0, 16),
                                                 (64, 32, 0, 64, 0, 32),
                                                 (64, 32, 0, 64, 0, 32)],
-                              pool_sizes=[2, 2, 0, 2, 0, 2],
-                              n_hidden=512,
-                              output_dropout=0.5,
-                              inception_dropout=0.2,
-                              n_out=n_classes,
-                              trans_func=rectify,
-                              out_func=softmax,
-                              batch_size=batch_size,
-                              batch_norm=False)
+                      pool_sizes=[2, 2, 0, 2, 0, 2],
+                      n_hidden=512,
+                      output_dropout=0.5,
+                      inception_dropout=0.2,
+                      n_out=n_classes,
+                      trans_func=rectify,
+                      out_func=softmax,
+                      batch_size=batch_size,
+                      batch_norm=False)
 
         # Generate root path and edit
         root_path = model.get_root_path()

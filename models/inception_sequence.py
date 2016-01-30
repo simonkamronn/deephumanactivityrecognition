@@ -8,22 +8,22 @@ from lasagne.layers import get_output, DenseLayer, DropoutLayer, InputLayer, \
     SliceLayer, ConcatLayer
 from lasagne_extensions.layers.batch_norm import BatchNormLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
-from lasagne_extensions.updates import rmsprop
+from lasagne_extensions.updates import rmsprop, adam
 from models.modules import inception_module, BatchNormalizeLayer
 from lasagne_extensions.layers import TiedDropoutLayer
 
 
-class Inception_seq(Model):
+class Incep(Model):
     def __init__(self, n_in, inception_layers, n_out, pool_sizes=None, n_hidden=512,
                  trans_func=rectify, out_func=softmax, output_dropout=0.0, stats=0,
                  batch_norm=False, inception_dropout=0.0):
-        super(Inception_seq, self).__init__(n_in, n_hidden, n_out, trans_func)
+        super(Incep, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.outf = out_func
         self.log = ""
 
         # Overwrite input layer
         sequence_length, n_features = n_in
-        self.l_in = InputLayer(shape=(None, sequence_length, n_features), name='Input')
+        self.l_in = InputLayer(shape=(None, sequence_length+stats, n_features), name='Input')
         l_prev = self.l_in
 
         # Separate into raw values and statistics
@@ -40,8 +40,8 @@ class Inception_seq(Model):
         self.log += "\nAdding 2D conv layer: %d x %d" % (32, 3)
         l_prev = Conv2DLayer(l_prev, num_filters=32, filter_size=(3, 1), pad='same', nonlinearity=None, b=None, name='Input Conv2D')
         l_prev = BatchNormalizeLayer(l_prev, normalize=batch_norm, nonlinearity=self.transf)
-        l_prev = TiedDropoutLayer(l_prev, p=inception_dropout, name='Input conv dropout')
         l_prev = Pool2DLayer(l_prev, pool_size=(2, 1), name='Input pool')
+        l_prev = TiedDropoutLayer(l_prev, p=inception_dropout, name='Input conv dropout')
 
         # Inception layers
         for inception_layer, pool_size in zip(inception_layers, pool_sizes):
@@ -88,7 +88,7 @@ class Inception_seq(Model):
         self.sym_t = T.matrix('t')
 
     def build_model(self, train_set, test_set, validation_set=None):
-        super(Inception_seq, self).build_model(train_set, test_set, validation_set)
+        super(Incep, self).build_model(train_set, test_set, validation_set)
 
         epsilon = 1e-8
         y_train = T.clip(get_output(self.model, self.sym_x), epsilon, 1)
@@ -104,7 +104,7 @@ class Inception_seq(Model):
         sym_beta2 = T.scalar('beta2')
         grads = T.grad(loss_cc, all_params)
         grads = [T.clip(g, -5, 5) for g in grads]
-        updates = rmsprop(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
+        updates = adam(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
 
         inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2]
         f_train = theano.function(

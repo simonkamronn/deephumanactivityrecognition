@@ -13,7 +13,7 @@ time_midnight = datetime.strptime(datetime.now().strftime('%Y-%m-%d'), '%Y-%m-%d
 sub_dirs = sorted(os.listdir(model_directory))
 labels = ['accuracy', 'test error', 'index', 'dir', 'name', 'id', 'user', 'cv_id', 'train_acc']
 pd.set_option('display.max_rows', 500)
-pd.set_option('display.max_columns', 10)
+pd.set_option('display.max_columns', 8)
 pd.set_option('display.width', 300)
 pd.set_option('display.column_space', 5)
 
@@ -72,10 +72,11 @@ def cv_lookup(today_only=False, dataset='', print_out=True):
     df = pd.DataFrame.from_dict(d)
     df['accuracy'] = pd.to_numeric(df['accuracy'])
     df['train_acc'] = pd.to_numeric(df['train_acc'])
+    # df['cv_id'] = pd.to_numeric(df['cv_id'])
     df = df.sort_values(by='user', ascending=True)
 
     if print_out and len(df) > 0:
-        df['cv_name'] = df['name'] + '_' + df['cv_id']
+        df['cv_name'] = df['name'] + " " + df['cv_id'].apply(lambda x: x[4:])
         df_pivot = df[['accuracy', 'cv_name', 'user']].pivot('user', 'cv_name')['accuracy']
         df_pivot = df_pivot.sort_index(ascending=True)
         print(df_pivot.describe().transpose().sort_values(by='mean', ascending=False))
