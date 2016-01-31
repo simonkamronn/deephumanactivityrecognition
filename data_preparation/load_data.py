@@ -94,59 +94,61 @@ class LoadHAR(object):
             y = np.empty((0))
             users = np.empty((0))
 
+            # for exp, user in labels[['exp', 'user']].drop_duplicates().values:
+            #     print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
+            #     values = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ').values
+            #     idx = ((labels['exp']==exp) & (labels['user']==user))
+            #
+            #     for activity, start, end in labels[['activity', 'start', 'end']][idx].values:
+            #         segment = values[start:end]
+            #
+            #         # Pad a segment to a multiple of n_samples
+            #         if segment.shape[0] <= self.n_samples:
+            #             pad_width = int(np.ceil(segment.shape[0]/float(self.n_samples))*self.n_samples - segment.shape[0])
+            #             segment = np.pad(segment, ((0, pad_width), (0, 0)), 'edge').reshape(1, self.n_samples, 3)
+            #
+            #         # Segment with a rolling window allowing overlap
+            #         else:
+            #             try:
+            #                 segment = rolling_window(segment, (self.n_samples, 0), self.step).swapaxes(1, 2)
+            #             except ValueError, e:
+            #                 print(e)
+            #                 print(segment.shape)
+            #
+            #         # Collect data
+            #         data_array = np.concatenate((data_array, segment))
+            #         y = np.concatenate((y, [activity]*segment.shape[0]))
+            #         users = np.concatenate((users, [(user)]*segment.shape[0]))
             for exp, user in labels[['exp', 'user']].drop_duplicates().values:
                 print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
-                values = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ').values
+                df = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ')
                 idx = ((labels['exp']==exp) & (labels['user']==user))
 
+                values = df.values
+                activities = np.zeros((values.shape[0], 1))
                 for activity, start, end in labels[['activity', 'start', 'end']][idx].values:
-                    segment = values[start:end]
+                    activities[start:end] = activity
 
-                    # Pad a segment to a multiple of n_samples
-                    if segment.shape[0] <= self.n_samples:
-                        pad_width = int(np.ceil(segment.shape[0]/float(self.n_samples))*self.n_samples - segment.shape[0])
-                        segment = np.pad(segment, ((0, pad_width), (0, 0)), 'edge').reshape(1, self.n_samples, 3)
+                values = np.concatenate((values, activities), axis=1)
 
-                    # Segment with a rolling window allowing overlap
-                    else:
-                        try:
-                            segment = rolling_window(segment, (self.n_samples, 0), self.step).swapaxes(1, 2)
-                        except ValueError, e:
-                            print(e)
-                            print(segment.shape)
+                # Segment into windows with overlap
+                segmented = rolling_window(values, (self.n_samples, 0), self.step).swapaxes(1, 2)
 
-                    # Collect data
-                    data_array = np.concatenate((data_array, segment))
-                    y = np.concatenate((y, [activity]*segment.shape[0]))
-                    users = np.concatenate((users, [(user)]*segment.shape[0]))
-            # for exp, user in labels[['exp', 'user']].drop_duplicates().values:
-                # print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
-                # df = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ')
-                # idx = ((labels['exp']==exp) & (labels['user']==user))
-                #
-                # # Initialize activity column to zeros
-                # df['activity'] = 0
-                # for activity, start, end in labels[['activity', 'start', 'end']][idx].values:
-                #     df['activity'].loc[start:end] = activity
-                #
-                # # Segment into windows with overlap
-                # segmented = rolling_window(df.values, (self.n_samples, 0), self.step).swapaxes(1, 2)
-                #
-                # # Find y label
+                # Find y label
                 # t = []
                 # for idx in range(segmented.shape[0]):
-                #     t.append(np.argmax(np.bincount(segmented[idx, :, -1].astype('int'))))
-                # t = np.asarray(t)
-                #
-                # # Remove samples without label
-                # idx = t != 0
-                # segmented = segmented[idx]
-                # t = t[idx]
-                #
-                # # Collect data
-                # y = np.concatenate((y, t))
-                # data_array = np.concatenate((data_array, segmented[:, :, :-1]))
-                # users = np.concatenate((users, [(user)]*len(t)))
+                    # t.append(segmented[idx, -1, -1].astype('int'))
+                t = np.asarray(segmented[:, -1, -1]).astype('int')
+
+                # Remove samples without label
+                idx = t != 0
+                segmented = segmented[idx]
+                t = t[idx]
+
+                # Collect data
+                y = np.concatenate((y, t))
+                data_array = np.concatenate((data_array, segmented[:, :, :-1]))
+                users = np.concatenate((users, [(user)]*len(t)))
         print('Data shape:', data_array.shape)
         print('Target shape:', y.shape)
         print('Unique targets: %d' % np.count_nonzero(np.unique(y.flatten()).astype('int')))
