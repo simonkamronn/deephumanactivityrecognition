@@ -32,7 +32,7 @@ class tconvRNN(Model):
         # Separate into raw values and statistics
         if stats > 0:
             stats_layer = SliceLayer(l_prev, indices=slice(sequence_length, None), axis=1)
-            stats_layer = ReshapeLayer(stats_layer, (-1, stats*n_features))
+            stats_layer = ReshapeLayer(stats_layer, (-1, stats*n_features, 1))
             print('Stats layer shape', stats_layer.output_shape)
             l_prev = SliceLayer(l_prev, indices=slice(0, sequence_length), axis=1)
 
@@ -76,7 +76,11 @@ class tconvRNN(Model):
         l_prev = ReshapeLayer(l_prev, (-1, s3, s2*s4))
 
         # Concat with statistics
-        if stats > 2:
+        if stats > 0:
+            self.log += "\nConcatenating stats"
+            stats_layer = Upscale1DLayer(stats_layer, scale_factor=s3)
+            stats_layer = DimshuffleLayer(stats_layer, (0, 2, 1))
+            print("Upscaled stats layer, ", stats_layer.output_shape)
             l_prev = ConcatLayer((l_prev, stats_layer), axis=2)
 
         # Add LSTM layers

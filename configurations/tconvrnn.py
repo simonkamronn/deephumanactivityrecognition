@@ -43,7 +43,7 @@ def main():
 
         model = tconvRNN(n_in=(n_samples, conf.n_features),
                          n_filters=[64, 64, 64, 64],
-                         filter_sizes=[3]*4,
+                         filter_sizes=[5]*4,
                          pool_sizes=[0, 0, 0, 0],
                          n_hidden=[128, 128],
                          conv_dropout=0.0,
