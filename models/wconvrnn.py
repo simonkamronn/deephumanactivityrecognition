@@ -15,11 +15,11 @@ CONST_FORGET_B = 1.
 GRAD_CLIP = 5
 
 
-class convRNN(Model):
+class wconvRNN(Model):
     def __init__(self, n_in, n_hidden, n_out, n_filters, filter_sizes, pool_sizes, stats=2,
                  grad_clip=GRAD_CLIP, peepholes=False, trans_func=rectify, out_func=softmax, factor=8,
                  conv_dropout=0.0, rnn_in_dropout=0.0, rnn_hid_dropout=0.0, output_dropout=0.0):
-        super(convRNN, self).__init__(n_in, n_hidden, n_out, trans_func)
+        super(wconvRNN, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.outf = out_func
         self.log = ""
 
@@ -122,7 +122,7 @@ class convRNN(Model):
         self.sym_t = T.tensor3('t')
 
     def build_model(self, train_set, test_set, validation_set=None):
-        super(convRNN, self).build_model(train_set, test_set, validation_set)
+        super(wconvRNN, self).build_model(train_set, test_set, validation_set)
 
         epsilon = 1e-8
         y_train = T.clip(get_output(self.model, self.sym_x), epsilon, 1)

@@ -1,4 +1,4 @@
-from models.convrnn import convRNN
+from models.wconvrnn import wconvRNN
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify
 from data_preparation.load_data import LoadHAR, ACTIVITY_MAP
@@ -62,17 +62,17 @@ def main():
               % (n_train_batches, n_test_batches, n_valid_batches))
 
         n_conv = 5
-        model = convRNN(n_in=(sequence_length, n_features),
-                        n_filters=[64]*n_conv,
-                        filter_sizes=[3]*n_conv,
-                        pool_sizes=[1, 2, 1, 2, 2],
-                        n_hidden=[50, 50],
-                        conv_dropout=0.0,
-                        output_dropout=0.5,
-                        n_out=n_classes,
-                        trans_func=rectify,
-                        out_func=softmax,
-                        factor=factor)
+        model = wconvRNN(n_in=(sequence_length, n_features),
+                         n_filters=[64]*n_conv,
+                         filter_sizes=[3]*n_conv,
+                         pool_sizes=[1, 2, 1, 2, 2],
+                         n_hidden=[50, 50],
+                         conv_dropout=0.0,
+                         output_dropout=0.5,
+                         n_out=n_classes,
+                         trans_func=rectify,
+                         out_func=softmax,
+                         factor=factor)
 
         # Generate root path and edit
         root_path = model.get_root_path()

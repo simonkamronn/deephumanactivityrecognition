@@ -142,7 +142,7 @@ class ModelConfiguration(object):
         train_args['inputs']['batchsize'] = batch_size
         train_args['inputs']['learningrate'] = lr
         train_args['inputs']['beta1'] = 0.9
-        train_args['inputs']['beta2'] = 0.999
+        train_args['inputs']['beta2'] = 1e-6
         validate_args['inputs']['batchsize'] = batch_size
 
         train.add_initial_training_notes("Standardizing data after adding features")
@@ -151,15 +151,16 @@ class ModelConfiguration(object):
         train.write_to_logger("LOO user: %s" % self.user)
         train.write_to_logger("Training samples: %d" % n_train)
         train.write_to_logger("Test samples: %d" % n_test)
+        train.write_to_logger("Classes: %d" % self.n_classes)
         train.write_to_logger("Sequence length: %d" % sequence_length)
         train.write_to_logger("Step: %d" % load_data.step)
-        train.write_to_logger("Shuffle: %s" % False)
+        train.write_to_logger("Shuffle: %s" % len(self.cv) < len(self.user_names))
         train.write_to_logger("Factor: %d" % factor)
         train.write_to_logger("Add pitch: %s\nAdd roll: %s" % (load_data.add_pitch, load_data.add_roll))
         train.write_to_logger("Only magnitude: %s" % load_data.comp_magnitude)
         train.write_to_logger("Add filter separated signals: %s" % load_data.add_filter)
         train.write_to_logger("Transfer function: %s" % model.transf)
-        train.write_to_logger("Network Architecture ---------------")
+        # train.write_to_logger("Network Architecture ---------------")
         # for layer in get_all_layers(model.model):
         #    train.write_to_logger(layer.name + ": " + str(get_output_shape(layer)))
 

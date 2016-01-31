@@ -104,7 +104,7 @@ class Incep(Model):
         sym_beta2 = T.scalar('beta2')
         grads = T.grad(loss_cc, all_params)
         grads = [T.clip(g, -5, 5) for g in grads]
-        updates = adam(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
+        updates = rmsprop(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
 
         inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2]
         f_train = theano.function(

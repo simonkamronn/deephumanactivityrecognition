@@ -3,17 +3,17 @@ import shutil
 from lasagne.nonlinearities import leaky_rectify, rectify, softmax
 from base import ModelConfiguration
 from data_preparation.load_data import LoadHAR
-from models.convrnn import convRNN
+from models.tconvrnn import tconvRNN
 from training.train import TrainModel
 from utils import env_paths as paths
 from sklearn.cross_validation import LeavePLabelOut, StratifiedKFold, StratifiedShuffleSplit, ShuffleSplit
 import numpy as np
 
+
 def main():
-    n_samples, step = 50, 50
-    load_data = LoadHAR(add_pitch=True, add_roll=True, add_filter=False, n_samples=n_samples,
+    n_samples, step = 25, 13
+    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples,
                         step=step, normalize=True, comp_magnitude=False, simple_labels=True, common_labels=False)
-    factor = 10
 
     conf = ModelConfiguration()
     conf.load_datasets([load_data.uci_hapt], label_limit=6)
@@ -30,10 +30,10 @@ def main():
         # conf.cv = LeavePLabelOut(conf.users, p=1)
 
         # Divide into K folds balanced on labels
-        # conf.cv = StratifiedKFold(conf.users, n_folds=10)
+        conf.cv = StratifiedKFold(conf.users, n_folds=10)
 
         # And shuffle
-        conf.cv = StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=1, test_size=0.1, random_state=None)
+        # conf.cv = StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=1, test_size=0.1, random_state=None)
 
         # Pure shuffle
         # conf.cv = ShuffleSplit(conf.y.shape[0], n_iter=2, test_size=0.1)
@@ -41,20 +41,19 @@ def main():
     for train_index, test_index in conf.cv:
         conf.user = user
 
-        model = convRNN(n_in=(n_samples * factor, conf.n_features),
-                        n_filters=[32, 32],
-                        filter_sizes=[3]*2,
-                        pool_sizes=[2, 2],
-                        n_hidden=[100, 100, 100],
-                        conv_dropout=0.3,
-                        rnn_in_dropout=0.0,
-                        rnn_hid_dropout=0.0,
-                        output_dropout=0.5,
-                        n_out=conf.n_classes,
-                        trans_func=leaky_rectify,
-                        out_func=softmax,
-                        factor=factor,
-                        stats=conf.stats)
+        model = tconvRNN(n_in=(n_samples, conf.n_features),
+                         n_filters=[64, 64, 64, 64],
+                         filter_sizes=[3]*4,
+                         pool_sizes=[0, 0, 0, 0],
+                         n_hidden=[128, 128],
+                         conv_dropout=0.0,
+                         rnn_in_dropout=0.0,
+                         rnn_hid_dropout=0.0,
+                         output_dropout=0.5,
+                         n_out=conf.n_classes,
+                         trans_func=rectify,
+                         out_func=softmax,
+                         stats=conf.stats)
 
         if len(conf.cv) > 1:
             user_idx += 1
@@ -71,11 +70,12 @@ def main():
 
         scriptpath = path.realpath(__file__)
         filename = path.basename(scriptpath)
+        print(scriptpath, model.root_path, filename)
         shutil.copy(scriptpath, model.root_path + '/' + filename)
 
         train = TrainModel(model=model,
-                           anneal_lr=0.8,
-                           anneal_lr_freq=50,
+                           anneal_lr=0.9,
+                           anneal_lr_freq=1,
                            output_freq=1,
                            pickle_f_custom_freq=100,
                            f_custom_eval=None)
@@ -89,7 +89,7 @@ def main():
                  model=model,
                  train=train,
                  load_data=load_data,
-                 factor=factor)
+                 batch_size=100)
 
 if __name__ == "__main__":
     main()
