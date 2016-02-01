@@ -11,9 +11,9 @@ import numpy as np
 
 
 def main():
-    n_samples, step = 25, 13
+    n_samples, step = 25, 10
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples,
-                        step=step, normalize=True, comp_magnitude=False, simple_labels=True, common_labels=False)
+                        step=step, normalize='channels', comp_magnitude=False, simple_labels=True, common_labels=False)
 
     conf = ModelConfiguration()
     conf.load_datasets([load_data.uci_hapt], label_limit=6)
@@ -27,10 +27,10 @@ def main():
         print('Testing user: %s' % user)
     else:
         # Cross validate on users
-        # conf.cv = LeavePLabelOut(conf.users, p=1)
+        conf.cv = LeavePLabelOut(conf.users, p=1)
 
         # Divide into K folds balanced on labels
-        conf.cv = StratifiedKFold(conf.users, n_folds=10)
+        # conf.cv = StratifiedKFold(conf.users, n_folds=10)
 
         # And shuffle
         # conf.cv = StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=1, test_size=0.1, random_state=None)
@@ -44,14 +44,14 @@ def main():
         model = tconvRNN(n_in=(n_samples, conf.n_features),
                          n_filters=[64, 64, 64, 64],
                          filter_sizes=[5]*4,
-                         pool_sizes=[0, 0, 0, 0],
+                         pool_sizes=[0]*4,
                          n_hidden=[128, 128],
-                         conv_dropout=0.0,
+                         conv_dropout=0.3,
                          rnn_in_dropout=0.0,
                          rnn_hid_dropout=0.0,
                          output_dropout=0.5,
                          n_out=conf.n_classes,
-                         trans_func=rectify,
+                         trans_func=leaky_rectify,
                          out_func=softmax,
                          stats=conf.stats)
 
