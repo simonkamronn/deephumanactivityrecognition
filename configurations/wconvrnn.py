@@ -10,10 +10,10 @@ from sklearn.cross_validation import LeavePLabelOut, StratifiedKFold, Stratified
 import numpy as np
 
 def main():
-    n_samples, step = 50, 50
+    n_samples, step = 25, 25
     load_data = LoadHAR(add_pitch=True, add_roll=True, add_filter=True, n_samples=n_samples,
-                        step=step, normalize=True, comp_magnitude=False, simple_labels=True, common_labels=False)
-    factor = 10
+                        step=step, normalize='segments', comp_magnitude=False, simple_labels=True, common_labels=False)
+    factor = 20
 
     conf = ModelConfiguration()
     conf.load_datasets([load_data.uci_hapt], label_limit=6)
@@ -27,13 +27,13 @@ def main():
         print('Testing user: %s' % user)
     else:
         # Cross validate on users
-        # conf.cv = LeavePLabelOut(conf.users, p=1)
+        conf.cv = LeavePLabelOut(conf.users, p=1)
 
         # Divide into K folds balanced on labels
         # conf.cv = StratifiedKFold(conf.users, n_folds=10)
 
         # And shuffle
-        conf.cv = StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=1, test_size=0.1, random_state=None)
+        # conf.cv = StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=1, test_size=0.1, random_state=None)
 
         # Pure shuffle
         # conf.cv = ShuffleSplit(conf.y.shape[0], n_iter=2, test_size=0.1)
@@ -42,11 +42,12 @@ def main():
         conf.user = user
 
         model = wconvRNN(n_in=(n_samples * factor, conf.n_features),
-                         n_filters=[32, 32],
-                         filter_sizes=[3]*2,
-                         pool_sizes=[2, 2],
-                         n_hidden=[100, 100, 100],
-                         conv_dropout=0.3,
+                         n_filters=[16, 32, 64, 128],
+                         filter_sizes=[3]*4,
+                         pool_sizes=[0]*4,
+                         n_hidden=[100, 50, 100],
+                         conv_dropout=0.5,
+                         conv_stride=2,
                          rnn_in_dropout=0.0,
                          rnn_hid_dropout=0.0,
                          output_dropout=0.5,
