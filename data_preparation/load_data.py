@@ -35,8 +35,8 @@ else:
 
 class LoadHAR(object):
     def __init__(self, root_folder=ROOT_FOLDER, add_pitch=False, add_roll=False, expand=False,
-                 add_filter=False, n_samples=200, step=200, normalize=True, comp_magnitude=False,
-                 simple_labels=False, common_labels=False):
+                 add_filter=False, n_samples=200, step=200, normalize='channels', comp_magnitude=False,
+                 simple_labels=False, common_labels=True):
         self.root_folder = root_folder
         if root_folder is None:
             raise RuntimeError('Invalid folder')
@@ -48,7 +48,7 @@ class LoadHAR(object):
         self.add_filter = add_filter
         self.n_samples = n_samples
         self.step = step
-        self.normalize = normalize
+        self.normalize = normalize if not normalize == True else 'channels'
         self.comp_magnitude = comp_magnitude
         self.simple_labels = simple_labels
         self.common_labels = common_labels
@@ -138,7 +138,8 @@ class LoadHAR(object):
                 # t = []
                 # for idx in range(segmented.shape[0]):
                     # t.append(segmented[idx, -1, -1].astype('int'))
-                t = np.asarray(segmented[:, -1, -1]).astype('int')
+                t_idx = int(n.samples/2)
+                t = np.asarray(segmented[:, t_idx, -1]).astype('int')
 
                 # Remove samples without label
                 idx = t != 0
@@ -532,13 +533,15 @@ class LoadHAR(object):
         if add_pitch: data = np.concatenate((data, pitches), axis=2)
         if add_filter: data = np.concatenate((data, tmp_lp, tmp_hp), axis=2)
 
-        if normalise:
+        if normalise == 'channels':
             n_win, n_samp, n_dim = data.shape
-            # data_mean = data.reshape((-1, n_dim)).mean(axis=0)
-            # data_std = data.reshape((-1, n_dim)).std(axis=0)
-            # data = (data.reshape((-1, n_dim)) - data_mean).reshape((n_win, n_samp, n_dim))
-            # data = (data.reshape((-1, n_dim)) / data_std).reshape((n_win, n_samp, n_dim))
+            data_mean = data.reshape((-1, n_dim)).mean(axis=0)
+            data_std = data.reshape((-1, n_dim)).std(axis=0)
+            data = (data.reshape((-1, n_dim)) - data_mean).reshape((n_win, n_samp, n_dim))
+            data = (data.reshape((-1, n_dim)) / data_std).reshape((n_win, n_samp, n_dim))
 
+        elif normalise == 'segments':
+            n_win, n_samp, n_dim = data.shape
             for idx in range(data.shape[0]):
                 data_mean = data[idx].mean(axis=0)
                 data_std = data[idx].std(axis=0)
@@ -547,6 +550,7 @@ class LoadHAR(object):
 
                 stats.append([data_mean, data_std])
             stats = np.array(stats)
+
         return data, stats
 
 
