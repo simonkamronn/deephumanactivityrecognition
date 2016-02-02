@@ -107,7 +107,7 @@ def rolling_window_lastaxis(a, window, step):
     if window < 1:
        raise ValueError, "`window` must be at least 1."
     if window > a.shape[-1]:
-       raise ValueError, "`window` is too long."
+        raise ValueError, "`window` is too long: %d" % window
     shape = a.shape[:-1] + ((a.shape[-1] - window + step)/step, window)
     strides = a.strides[:-1] + (a.strides[-1]*step,) + (a.strides[-1],)
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)

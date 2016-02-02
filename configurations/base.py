@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 plt.ioff()
 import numpy as np
 from sklearn.metrics import confusion_matrix
-from har_utils import one_hot, expand_target, magnitude
+from har_utils import one_hot, expand_target, magnitude, rolling_window
 
 
 class ModelConfiguration(object):
@@ -78,22 +78,19 @@ class ModelConfiguration(object):
         print('Xtrain mean: %f\tstd: %f' % (x_train.mean(), x_train.std()))
         print('Xtest mean: %f\tstd: %f' % (x_test.mean(), x_test.std()))
 
-        train_set = (x_train, y_train)
-        test_set = (x_test, y_test)
+        def concat_sequence(x, window, step):
+            return rolling_window(x.reshape(-1, x.shape[-1]).swapaxes(0, 1), window, step)\
+                .swapaxes(0, 1).swapaxes(1, 2)
 
         # Reshape datasets to longer sequences
         if factor > 1:
-            sequence_length *= factor
-            n_train = train_set[0].shape[0]//factor
-            print("Resizing train set from %d to %d" % (train_set[0].shape[0], n_train*factor))
-            train_set = (np.reshape(train_set[0][:factor*n_train], (n_train, sequence_length, n_features)),
-                         np.reshape(train_set[1][:factor*n_train], (n_train, factor, self.n_classes)))
+            x_train = concat_sequence(x_train, factor*sequence_length, sequence_length)
+            y_train = concat_sequence(y_train, factor, 1)
+            x_test = concat_sequence(x_test, factor*sequence_length, sequence_length)
+            y_test = concat_sequence(y_test, factor, 1)
 
-            n_test = test_set[0].shape[0]//factor
-            print("Resizing test set from %d to %d" % (test_set[0].shape[0], n_test*factor))
-            test_set = (np.reshape(test_set[0][:factor*n_test], (n_test, sequence_length, n_features)),
-                        np.reshape(test_set[1][:factor*n_test], (n_test, factor, self.n_classes)))
-
+        train_set = (x_train, y_train)
+        test_set = (x_test, y_test)
         print('Train size: ', train_set[0].shape)
         print('Test size: ', test_set[0].shape)
 

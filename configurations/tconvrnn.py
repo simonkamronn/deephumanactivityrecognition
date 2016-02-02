@@ -11,7 +11,7 @@ import numpy as np
 
 
 def main():
-    n_samples, step = 25, 10
+    n_samples, step = 40, 20
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples,
                         step=step, normalize='channels', comp_magnitude=False, simple_labels=True, common_labels=False)
 

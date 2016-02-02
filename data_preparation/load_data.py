@@ -138,7 +138,7 @@ class LoadHAR(object):
                 # t = []
                 # for idx in range(segmented.shape[0]):
                     # t.append(segmented[idx, -1, -1].astype('int'))
-                t_idx = int(n.samples/2)
+                t_idx = int(self.n_samples/2)
                 t = np.asarray(segmented[:, t_idx, -1]).astype('int')
 
                 # Remove samples without label

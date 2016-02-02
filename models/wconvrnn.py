@@ -16,8 +16,8 @@ GRAD_CLIP = 5
 
 
 class wconvRNN(Model):
-    def __init__(self, n_in, n_hidden, n_out, n_filters, filter_sizes, pool_sizes, stats=2,
-                 grad_clip=GRAD_CLIP, peepholes=False, trans_func=rectify, out_func=softmax, factor=8,
+    def __init__(self, n_in, n_hidden, n_out, n_filters, filter_sizes, pool_sizes, stats=2, conv_stride=1,
+                 grad_clip=GRAD_CLIP, peepholes=False, trans_func=rectify, out_func=softmax, factor=1,
                  conv_dropout=0.0, rnn_in_dropout=0.0, rnn_hid_dropout=0.0, output_dropout=0.0):
         super(wconvRNN, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.outf = out_func
@@ -57,7 +57,8 @@ class wconvRNN(Model):
                                  W=init.GlorotNormal('relu'),
                                  b=init.Normal(1e-3),
                                  nonlinearity=self.transf,
-                                 stride=(1, 1))
+                                 stride=(conv_stride, 1))
+            self.log += "\nConv stride: %d" % conv_stride
             if pool_size > 1:
                 self.log += "\nAdding max pooling layer: %d" % pool_size
                 l_prev = MaxPool2DLayer(l_prev, pool_size=(pool_size, 1))

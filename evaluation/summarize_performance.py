@@ -13,7 +13,7 @@ time_midnight = datetime.strptime(datetime.now().strftime('%Y-%m-%d'), '%Y-%m-%d
 sub_dirs = sorted(os.listdir(model_directory))
 labels = ['accuracy', 'test error', 'index', 'dir', 'name', 'id', 'user', 'cv_id', 'train_acc']
 pd.set_option('display.max_rows', 500)
-pd.set_option('display.max_columns', 8)
+pd.set_option('display.max_columns', 10)
 pd.set_option('display.width', 300)
 pd.set_option('display.column_space', 5)
 
