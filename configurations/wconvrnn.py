@@ -12,11 +12,11 @@ import numpy as np
 def main():
     n_samples, step = 25, 25
     load_data = LoadHAR(add_pitch=True, add_roll=True, add_filter=True, n_samples=n_samples,
-                        step=step, normalize='segments', comp_magnitude=False, simple_labels=True, common_labels=False)
-    factor = 20
+                        step=step, normalize='segments', comp_magnitude=False, simple_labels=True, common_labels=True)
+    factor = 10
 
     conf = ModelConfiguration()
-    conf.load_datasets([load_data.uci_hapt], label_limit=6)
+    conf.load_datasets([load_data.uci_hapt], label_limit=18)
 
     user_idx = -1
     user = None  # 'UCI HAPT10'
@@ -27,13 +27,13 @@ def main():
         print('Testing user: %s' % user)
     else:
         # Cross validate on users
-        conf.cv = LeavePLabelOut(conf.users, p=1)
+        # conf.cv = LeavePLabelOut(conf.users, p=1)
 
         # Divide into K folds balanced on labels
-        # conf.cv = StratifiedKFold(conf.users, n_folds=10)
+        conf.cv = StratifiedKFold(np.argmax(conf.y, axis=1), n_folds=10)
 
         # And shuffle
-        # conf.cv = StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=1, test_size=0.1, random_state=None)
+        # conf.cv = StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=10, test_size=0.1, random_state=None)
 
         # Pure shuffle
         # conf.cv = ShuffleSplit(conf.y.shape[0], n_iter=2, test_size=0.1)
@@ -45,8 +45,8 @@ def main():
                          n_filters=[16, 32, 64, 128],
                          filter_sizes=[3]*4,
                          pool_sizes=[0]*4,
-                         n_hidden=[100, 50, 100],
-                         conv_dropout=0.5,
+                         n_hidden=[50, 50],
+                         conv_dropout=0.3,
                          conv_stride=2,
                          rnn_in_dropout=0.0,
                          rnn_hid_dropout=0.0,
@@ -70,6 +70,7 @@ def main():
             paths.path_exists(model.root_path)
             rmdir(root_path)
 
+        # Copy script to output folder
         scriptpath = path.realpath(__file__)
         filename = path.basename(scriptpath)
         shutil.copy(scriptpath, model.root_path + '/' + filename)
@@ -81,7 +82,7 @@ def main():
                            pickle_f_custom_freq=100,
                            f_custom_eval=None)
         train.pickle = False
-        train.write_to_logger("Using StratifiedShuffleSplit with n_iter=1, test_size=0.1, random_state=None")
+        train.write_to_logger("StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=10, test_size=0.1, random_state=None)")
 
         conf.run(train_index,
                  test_index,

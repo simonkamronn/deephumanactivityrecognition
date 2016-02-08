@@ -111,8 +111,8 @@ class tconvRNN(Model):
         print("LSTM slice shape", get_output_shape(l_prev))
 
         # Optional extra dense layer
-        # l_prev = DenseLayer(l_prev, num_units=512, nonlinearity=trans_func)
-        # self.log += "\nAdding dense layer with %d units" % 512
+        l_prev = DenseLayer(l_prev, num_units=30, nonlinearity=trans_func)
+        self.log += "\nAdding dense layer with %d units" % 512
 
         if output_dropout:
             self.log += "\nAdding output dropout with probability: %.2f" % output_dropout

@@ -33,7 +33,6 @@ class wconvRNN(Model):
         # batch_size *= factor
         sequence_length /= factor
         l_prev = ReshapeLayer(l_prev, (-1, 1, sequence_length+stats, n_features))
-        l_prev = DimshuffleLayer(l_prev, (0, 3, 2, 1))
 
         # Separate into raw values and statistics
         if stats > 0:
@@ -42,9 +41,12 @@ class wconvRNN(Model):
             print('Stats layer shape', stats_layer.output_shape)
             l_prev = SliceLayer(l_prev, indices=slice(0, sequence_length), axis=2)
 
+        # Shuffle dimensions so features becomes channels
+        # l_prev = DimshuffleLayer(l_prev, (0, 3, 2, 1))
+
         # Add input noise
-        # self.log += "\nAdding noise layer: 0.1"
-        # l_prev = GaussianNoiseLayer(l_prev, sigma=0.1)
+        self.log += "\nAdding noise layer: 0.05"
+        l_prev = GaussianNoiseLayer(l_prev, sigma=0.05)
 
         # Adding convolutional layers
         print("Conv input shape", get_output_shape(l_prev))
@@ -75,10 +77,12 @@ class wconvRNN(Model):
         s1, s2, s3, s4 = l_prev.output_shape
 
         # Reshape for LSTM
-        l_prev = ReshapeLayer(l_prev, (-1, factor, s2*s3))
+        l_prev = ReshapeLayer(l_prev, (-1, factor, s2*s3*s4))
+        print(l_prev.output_shape)
 
         # Concat with statistics
-        if stats > 2:
+        if stats > 0:
+            self.log += "\nConcatenating stats"
             l_prev = ConcatLayer((l_prev, stats_layer), axis=2)
 
         # Add LSTM layers
@@ -95,8 +99,8 @@ class wconvRNN(Model):
                 grad_clipping=grad_clip,
                 peepholes=peepholes,
                 ingate=Gate(
-                    W_in=lasagne.init.HeUniform(),
-                    W_hid=lasagne.init.HeUniform()
+                    W_in=lasagne.init.GlorotNormal(),
+                    W_hid=lasagne.init.Orthogonal()
                 ),
                 forgetgate=Gate(
                     b=lasagne.init.Constant(CONST_FORGET_B)

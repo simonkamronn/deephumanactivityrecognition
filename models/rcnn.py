@@ -4,16 +4,18 @@ import theano.tensor as T
 from base import Model
 from lasagne_extensions.nonlinearities import rectify, softmax, leaky_rectify
 from lasagne.layers import get_output, get_output_shape, DenseLayer, DropoutLayer, InputLayer, FeaturePoolLayer, \
-    ReshapeLayer, DimshuffleLayer, get_all_params, Conv2DLayer, Pool2DLayer, GlobalPoolLayer
+    ReshapeLayer, DimshuffleLayer, get_all_params, Conv2DLayer, Pool2DLayer, GlobalPoolLayer, SliceLayer, ConcatLayer, \
+    GaussianNoiseLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
-from lasagne_extensions.updates import adam, rmsprop
+from lasagne_extensions.updates import adam, rmsprop, nesterov_momentum
 from modules import RecurrentConvLayer, BatchNormalizeLayer
+from lasagne_extensions.layers import TiedDropoutLayer
 
 
 class RCNN(Model):
     def __init__(self, n_in, n_filters, filter_sizes, n_out, pool_sizes=None, n_hidden=(), downsample=1, ccf=False,
                  rcl=(), rcl_dropout=0.0, trans_func=rectify, out_func=softmax, dropout_probability=0.0,
-                 batch_norm=False):
+                 batch_norm=False, stats=0):
         super(RCNN, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.outf = out_func
         self.log = ""
@@ -23,14 +25,20 @@ class RCNN(Model):
 
         # Overwrite input layer
         sequence_length, n_features = n_in
-        self.l_in = InputLayer(shape=(None, sequence_length, n_features), name='Input')
+        self.l_in = InputLayer(shape=(None, sequence_length+stats, n_features), name='Input')
         l_prev = self.l_in
         print("Input shape: ", get_output_shape(l_prev))
 
+        # Separate into raw values and statistics
+        if stats > 0:
+            stats_layer = SliceLayer(l_prev, indices=slice(sequence_length, None), axis=1)
+            stats_layer = ReshapeLayer(stats_layer, (-1, stats*n_features))
+            l_prev = SliceLayer(l_prev, indices=slice(0, sequence_length), axis=1)
+
         # Input noise
-        # sigma = 0.2
-        # self.log += "\nGaussian input noise: %02f" % sigma
-        # l_prev = GaussianNoiseLayer(l_prev, sigma=sigma)
+        sigma = 0.05
+        self.log += "\nGaussian input noise: %02f" % sigma
+        l_prev = GaussianNoiseLayer(l_prev, sigma=sigma)
 
         # Downsample input
         if downsample > 1:
@@ -69,8 +77,8 @@ class RCNN(Model):
                 self.log += "\nAdding max pooling layer: %d" % pool_size
                 l_prev = Pool2DLayer(l_prev, pool_size=(pool_size, 1), name='Max Pool')
             self.log += "\nAdding dropout layer: %.2f" % rcl_dropout
-            l_prev = DropoutLayer(l_prev, p=rcl_dropout, name='Dropout')
-            print("Conv out shape", get_output_shape(l_prev))
+            l_prev = TiedDropoutLayer(l_prev, p=rcl_dropout, name='Dropout')
+            self.log += "\nConv out shape: %s" % str(get_output_shape(l_prev))
 
         # Recurrent Convolutional layers
         filter_size = filter_sizes[0]
@@ -83,13 +91,14 @@ class RCNN(Model):
                                         normalize=batch_norm)
             self.log += "\nAdding max pool layer: 2"
             l_prev = Pool2DLayer(l_prev, pool_size=(2, 1), name='Max Pool')
-            # if rcl_dropout > 0.0:
-            #     self.log += "\nAdding dropout layer: %.2f" % rcl_dropout
-            #     l_prev = DropoutLayer(l_prev, p_in=rcl_dropout, name='Dropout')
             print("RCL out shape", get_output_shape(l_prev))
 
         l_prev = GlobalPoolLayer(l_prev, name='Global Max Pool')
         print("GlobalPoolLayer out shape", get_output_shape(l_prev))
+
+        # Append statistics
+        if stats > 0:
+            l_prev = ConcatLayer((l_prev, stats_layer), axis=1)
 
         for n_hid in n_hidden:
             self.log += "\nAdding dense layer with %d units" % n_hid
@@ -125,7 +134,7 @@ class RCNN(Model):
         sym_beta2 = T.scalar('beta2')
         grads = T.grad(loss_cc, all_params)
         grads = [T.clip(g, -5, 5) for g in grads]
-        updates = rmsprop(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
+        updates = nesterov_momentum(grads, all_params, self.sym_lr, sym_beta1)
 
         inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2]
         f_train = theano.function(
@@ -135,6 +144,7 @@ class RCNN(Model):
                 self.sym_x: self.sh_train_x[self.batch_slice],
                 self.sym_t: self.sh_train_t[self.batch_slice],
             },
+            on_unused_input='ignore'
         )
 
         f_test = theano.function(

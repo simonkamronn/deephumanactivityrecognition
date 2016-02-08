@@ -2,7 +2,7 @@ from os import rmdir
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify
 from base import ModelConfiguration
 from data_preparation.load_data import LoadHAR
-from models.inception_sequence import Incep
+from models.inception import Incep
 from training.train import TrainModel
 from utils import env_paths as paths
 from sklearn.cross_validation import LeavePLabelOut, StratifiedKFold, StratifiedShuffleSplit, ShuffleSplit

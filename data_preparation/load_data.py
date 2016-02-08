@@ -23,7 +23,7 @@ ACTIVITY_MAP = {0: 'WALKING', 1: 'CYCLING', 2: 'RUNNING', 3: 'STAIRS', 4: 'JOGGI
                 9: 'ARM_ELEVATION', 10: 'KNEE_BEND', 11: 'SITTING', 12: 'STANDING', 13: 'JUMP', 14: 'STEP', 15: 'NULL',
                 16: 'UPRIGHT_INACTIVE', 17: 'INACTIVE',
                 18: 'STAND_TO_SIT', 19: 'SIT_TO_STAND', 20: 'SIT_TO_LIE', 21: 'LIE_TO_SIT', 22: 'STAND_TO_LIE',
-                23: 'LIE_TO_STAND'}
+                23: 'LIE_TO_STAND', 24: 'TRANSITION'}
 MAP_ACTIVITY = dict((v, k) for k, v in ACTIVITY_MAP.iteritems())
 SR = 50
 
@@ -78,8 +78,8 @@ class LoadHAR(object):
                             9: 'SIT_TO_LIE', 10: 'LIE_TO_SIT', 11: 'STAND_TO_LIE', 12: 'LIE_TO_STAND'}
         else:
             activity_map = {1: 'WALKING', 2: 'STAIRS', 3: 'STAIRS', 4: 'INACTIVE',
-                            5: 'INACTIVE', 6: 'INACTIVE', 7: 'STAND_TO_SIT', 8: 'SIT_TO_STAND',
-                            9: 'SIT_TO_LIE', 10: 'LIE_TO_SIT', 11: 'STAND_TO_LIE', 12: 'LIE_TO_STAND'}
+                            5: 'INACTIVE', 6: 'INACTIVE', 7: 'TRANSITION', 8: 'TRANSITION',
+                            9: 'TRANSITION', 10: 'TRANSITION', 11: 'TRANSITION', 12: 'TRANSITION'}
         if os.path.isfile(data_file):
             data = pickle.load(open(data_file, 'r'))
         else:
@@ -526,12 +526,12 @@ class LoadHAR(object):
         if add_filter:
             enrich_fs = 50
             tmp_lp = split_signal(data, enrich_fs)
-            tmp_hp = data - tmp_lp
+            # tmp_hp = data - tmp_lp
 
         # Concat everything
         if add_roll: data = np.concatenate((data, rolls), axis=2)
         if add_pitch: data = np.concatenate((data, pitches), axis=2)
-        if add_filter: data = np.concatenate((data, tmp_lp, tmp_hp), axis=2)
+        if add_filter: data = np.concatenate((data, tmp_lp), axis=2)
 
         if normalise == 'channels':
             n_win, n_samp, n_dim = data.shape

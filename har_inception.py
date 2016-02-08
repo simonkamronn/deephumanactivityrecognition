@@ -1,4 +1,4 @@
-from models.inception_sequence import Incep
+from models.inception import Incep
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify
 from lasagne.layers import get_all_layers, get_output_shape

@@ -77,7 +77,7 @@ def expand_target(y, length):
     return np.rollaxis(np.tile(y, (length, 1, 1)), 1,)
 
 
-def split_signal(data, fs, cutoff=0.1, order=2):
+def split_signal(data, fs, cutoff=0.05, order=2):
     n_win, n_samples, n_dim = data.shape
     tmp = np.reshape(data, (n_win*n_samples, n_dim))
     normal_cutoff = cutoff / (0.5 * fs)

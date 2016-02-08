@@ -148,7 +148,6 @@ class ModelConfiguration(object):
         train.write_to_logger("Normalizing: %s" % load_data.normalize)
         train.write_to_logger("Simple labels: %s" % load_data.simple_labels)
         train.write_to_logger("Common labels: %s" % load_data.common_labels)
-        train.write_to_logger("Normalizing: %s" % load_data.normalize)
         train.write_to_logger("LOO user: %s" % self.user)
         train.write_to_logger("Training samples: %d" % n_train)
         train.write_to_logger("Test samples: %d" % n_test)
