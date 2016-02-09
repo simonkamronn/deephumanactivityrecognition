@@ -544,7 +544,10 @@ class LoadHAR(object):
                 data_mean = data[idx].mean(axis=0)
                 data_std = data[idx].std(axis=0)
                 data[idx] = data[idx] - data_mean
-                data[idx] = data[idx] / data_std
+
+                # Only normalise std for segments with actual signal
+                if data_std.mean() > 0.1:
+                    data[idx] = data[idx] / data_std
 
                 stats.append([data_mean, data_std])
             stats = np.array(stats)
