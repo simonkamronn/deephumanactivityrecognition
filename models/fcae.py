@@ -16,7 +16,7 @@ GRAD_CLIP = 5
 
 
 class CAE(Model):
-    def __init__(self, n_in, n_hidden, n_out, filter_sizes, pool_sizes, stats=2, conv_stride=1,
+    def __init__(self, n_in, n_hidden, n_out, filters, pool_sizes, stats=2, conv_stride=1,
                  trans_func=rectify, conv_dropout=0.0):
         super(CAE, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.log = ""
@@ -28,27 +28,29 @@ class CAE(Model):
         print("Input shape", get_output_shape(input_layer))
 
         # Reshape
-        reshp = ReshapeLayer(input_layer, (-1, 1, sequence_length, n_features))
+        layer = ReshapeLayer(input_layer, (-1, 1, sequence_length, n_features))
 
         # Add input noise
         # self.log += "\nAdding noise layer: 0.05"
         # gaus_noise = GaussianNoiseLayer(reshp, sigma=0.05)
 
         ret = {}
-        ret['conv1'] = layer = bn(Conv2DLayer(reshp, num_filters=128, filter_size=(3, 1), pad='full'))
-        ret['pool1'] = layer = MaxPool2DLayer(layer, pool_size=(2, 1))
-        ret['conv2'] = layer = bn(Conv2DLayer(layer, num_filters=256, filter_size=(3, 1), pad='full'))
-        ret['pool2'] = layer = MaxPool2DLayer(layer, pool_size=(2, 1))
-        ret['conv3'] = layer = bn(Conv2DLayer(layer, num_filters=32, filter_size=(3, 1), pad='full'))
+        n_filters = len(filters)
+        for idx, num_filters in enumerate(filters):
+            ret['conv%d' % (idx+1)] = layer = bn(Conv2DLayer(layer, num_filters=num_filters, filter_size=(3, 1), pad='full'))
+            if idx < n_filters - 1:
+                ret['pool%d' % (idx+1)] = layer = MaxPool2DLayer(layer, pool_size=(2, 1))
+
         ret['enc'] = layer = GlobalPoolLayer(layer)
         print("Encoding layer shape", layer.output_shape)
         ret['ph1'] = layer = NonlinearityLayer(layer, nonlinearity=None)
         ret['ph2'] = layer = NonlinearityLayer(layer, nonlinearity=None)
         ret['unenc'] = layer = bn(InverseLayer(layer, ret['enc']))
-        ret['deconv3'] = layer = bn(Conv2DLayer(layer, num_filters=256, filter_size=(3, 1)))
-        ret['depool2'] = layer = InverseLayer(layer, ret['pool2'])
-        ret['deconv2'] = layer = bn(Conv2DLayer(layer, num_filters=128, filter_size=(3, 1)))
-        ret['depool1'] = layer = InverseLayer(layer, ret['pool1'])
+
+        for idx, num_filters in enumerate(filters[::-1][1:]):
+            ret['deconv%d' % (n_filters - idx)] = layer = bn(Conv2DLayer(layer, num_filters=num_filters, filter_size=(3, 1)))
+            ret['depool%d' % (n_filters - idx - 1)] = layer = InverseLayer(layer, ret['pool%d' % (n_filters - idx - 1)])
+
         ret['deconv0'] = layer = Conv2DLayer(layer, num_filters=1, filter_size=(3, 1), nonlinearity=None)
         ret['output'] = layer = ReshapeLayer(layer, (-1, sequence_length, n_features))
         print("CAE out shape", get_output_shape(layer))

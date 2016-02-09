@@ -14,7 +14,7 @@ plt.ioff()
 
 def main():
     n_samples, step = 200, 200
-    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples,
+    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, lowpass=10,
                         step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
 
     X, y, name, users, stats = load_data.uci_hapt()
@@ -44,7 +44,7 @@ def main():
     n_train_batches = n_train//batch_size
 
     model = CAE(n_in=(int(n_samples), int(n_features)),
-                filter_sizes=[0],
+                filters=[256, 128, 32],
                 pool_sizes=[0],
                 n_hidden=[0],
                 n_out=0,
@@ -79,6 +79,15 @@ def main():
                        pickle_f_custom_freq=100,
                        f_custom_eval=f_custom)
     train.pickle = False
+
+    train.write_to_logger("Normalizing: %s" % load_data.normalize)
+    train.write_to_logger("Simple labels: %s" % load_data.simple_labels)
+    train.write_to_logger("Common labels: %s" % load_data.common_labels)
+    train.write_to_logger("Step: %d" % load_data.step)
+    train.write_to_logger("Add pitch: %s\nAdd roll: %s" % (load_data.add_pitch, load_data.add_roll))
+    train.write_to_logger("Only magnitude: %s" % load_data.comp_magnitude)
+    train.write_to_logger("Lowpass: %s" % str(load_data.lowpass))
+    train.write_to_logger("Add filter separated signals: %s" % load_data.add_filter)
 
     test_args['inputs']['batchsize'] = batch_size
     train_args['inputs']['batchsize'] = batch_size
