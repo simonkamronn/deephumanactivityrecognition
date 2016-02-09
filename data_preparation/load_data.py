@@ -36,7 +36,7 @@ else:
 class LoadHAR(object):
     def __init__(self, root_folder=ROOT_FOLDER, add_pitch=False, add_roll=False, expand=False,
                  add_filter=False, n_samples=200, step=200, normalize='channels', comp_magnitude=False,
-                 simple_labels=False, common_labels=True):
+                 simple_labels=False, common_labels=True, lowpass=None):
         self.root_folder = root_folder
         if root_folder is None:
             raise RuntimeError('Invalid folder')
@@ -52,6 +52,7 @@ class LoadHAR(object):
         self.comp_magnitude = comp_magnitude
         self.simple_labels = simple_labels
         self.common_labels = common_labels
+        self.lowpass = lowpass
 
     def uci_hapt(self):
         """
@@ -500,7 +501,8 @@ class LoadHAR(object):
         n_win, n_samp, n_dim = data.shape
         stats = []
 
-        # data = lowpass_filter(data, fs=50, cutoff=20)
+        if self.lowpass:
+            data = lowpass_filter(data, fs=50, cutoff=self.lowpass)
 
         if ratio > 1:
             data = downsample(data.reshape(-1, n_dim), ratio=ratio).\
