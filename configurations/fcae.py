@@ -21,8 +21,9 @@ def main():
     users = ['%s%02d' % (name, user) for user in users]
     limited_labels = y < 6
     y = y[limited_labels]
-    X = X[limited_labels]
+    X = X[limited_labels].astype('float32')
     users = np.char.asarray(users)[limited_labels]
+    y_unique = np.unique(y)
 
     cv = StratifiedShuffleSplit(y, n_iter=1, test_size=0.1, random_state=0)
     for (train_index, test_index) in cv:
@@ -37,8 +38,9 @@ def main():
 
     n_train = train_set[0].shape[0]
     n_test = test_set[0].shape[0]
-    n_test_batches = 1
-    batch_size = n_test
+    batch_size = 64
+
+    n_test_batches = n_test//batch_size
     n_train_batches = n_train//batch_size
 
     model = CAE(n_in=(int(n_samples), int(n_features)),
@@ -55,19 +57,24 @@ def main():
                                                                                           None)
 
     def f_custom(model, path):
-        out = model.get_output(test_set[0]).eval()
         plt.clf()
-        f, axarr = plt.subplots(nrows=2, ncols=1)
-        axarr[0].plot(test_set[0], color='red')
-        axarr[1].plot(out, color='blue')
+        f, axarr = plt.subplots(nrows=len(y_unique), ncols=1)
 
-        f.set_size_inches(12, 8)
+        for idx, y_l in enumerate(y_unique):
+            act_idx = y_test == y_l
+            test_act = test_set[0][act_idx]
+            out = model.get_output(test_act).eval()
+
+            axarr[idx].plot(test_act[0], color='red')
+            axarr[idx].plot(out[0], color='blue', linestyle='dotted')
+
+        f.set_size_inches(12, 20)
         f.savefig(path, dpi=100)
         plt.close(f)
 
     train = TrainModel(model=model,
                        anneal_lr=0.75,
-                       anneal_lr_freq=50,
+                       anneal_lr_freq=100,
                        output_freq=1,
                        pickle_f_custom_freq=100,
                        f_custom_eval=f_custom)
@@ -85,7 +92,7 @@ def main():
                       f_validate, validate_args,
                       n_train_batches=n_train_batches,
                       n_test_batches=n_test_batches,
-                      n_epochs=500)
+                      n_epochs=2000)
 
 if __name__ == "__main__":
     main()

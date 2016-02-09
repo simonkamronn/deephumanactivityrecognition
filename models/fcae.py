@@ -41,6 +41,7 @@ class CAE(Model):
         ret['pool2'] = layer = MaxPool2DLayer(layer, pool_size=(2, 1))
         ret['conv3'] = layer = bn(Conv2DLayer(layer, num_filters=32, filter_size=(3, 1), pad='full'))
         ret['enc'] = layer = GlobalPoolLayer(layer)
+        print("Encoding layer shape", layer.output_shape)
         ret['ph1'] = layer = NonlinearityLayer(layer, nonlinearity=None)
         ret['ph2'] = layer = NonlinearityLayer(layer, nonlinearity=None)
         ret['unenc'] = layer = bn(InverseLayer(layer, ret['enc']))
@@ -48,8 +49,8 @@ class CAE(Model):
         ret['depool2'] = layer = InverseLayer(layer, ret['pool2'])
         ret['deconv2'] = layer = bn(Conv2DLayer(layer, num_filters=128, filter_size=(3, 1)))
         ret['depool1'] = layer = InverseLayer(layer, ret['pool1'])
-        ret['output'] = layer = Conv2DLayer(layer, num_filters=1, filter_size=(3, 1), nonlinearity=sigmoid)
-
+        ret['deconv0'] = layer = Conv2DLayer(layer, num_filters=1, filter_size=(3, 1), nonlinearity=None)
+        ret['output'] = layer = ReshapeLayer(layer, (-1, sequence_length, n_features))
         print("CAE out shape", get_output_shape(layer))
 
         self.model = ret['output']
@@ -61,7 +62,7 @@ class CAE(Model):
 
         y_train = get_output(self.model, self.sym_x)
         loss = aggregate(squared_error(y_train, self.sym_x), mode='mean')
-        loss += + 1e-4 * lasagne.regularization.regularize_network_params(self.model, lasagne.regularization.l2)
+        # loss += + 1e-4 * lasagne.regularization.regularize_network_params(self.model, lasagne.regularization.l2)
 
         y_test = get_output(self.model, self.sym_x, deterministic=True)
         loss_test = aggregate(squared_error(y_test, self.sym_x), mode='mean')
@@ -84,9 +85,9 @@ class CAE(Model):
         )
 
         f_test = theano.function(
-            [self.sym_batchsize], [loss_test],
+            [self.sym_index, self.sym_batchsize], [loss_test],
             givens={
-                self.sym_x: self.sh_test_x,
+                self.sym_x: self.sh_test_x[self.batch_slice],
             },
             on_unused_input='ignore',
         )
