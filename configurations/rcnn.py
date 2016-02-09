@@ -11,9 +11,9 @@ import numpy as np
 
 
 def main():
-    n_samples, step = 200, 100
+    n_samples, step = 200, 50
     load_data = LoadHAR(add_pitch=True, add_roll=True, add_filter=True, n_samples=n_samples,
-                        step=step, normalize='segments', comp_magnitude=False, simple_labels=True, common_labels=True)
+                        step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
 
     conf = ModelConfiguration()
     conf.load_datasets([load_data.uci_hapt], label_limit=18)
@@ -37,12 +37,11 @@ def main():
                      n_filters=[32],
                      filter_sizes=[3]*n_conv,
                      pool_sizes=[2]*n_conv,
-                     rcl=[3, 3, 3, 3],
+                     rcl=[2, 2, 2, 2],
                      rcl_dropout=0.5,
                      n_hidden=[512],
                      dropout_probability=0.5,
                      n_out=conf.n_classes,
-                     downsample=1,
                      ccf=False,
                      trans_func=rectify,
                      out_func=softmax,

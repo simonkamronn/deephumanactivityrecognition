@@ -42,7 +42,7 @@ class wconvRNN(Model):
             l_prev = SliceLayer(l_prev, indices=slice(0, sequence_length), axis=2)
 
         # Shuffle dimensions so features becomes channels
-        # l_prev = DimshuffleLayer(l_prev, (0, 3, 2, 1))
+        l_prev = DimshuffleLayer(l_prev, (0, 3, 2, 1))
 
         # Add input noise
         self.log += "\nAdding noise layer: 0.05"

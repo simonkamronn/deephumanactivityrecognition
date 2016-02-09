@@ -13,7 +13,7 @@ from lasagne_extensions.layers import TiedDropoutLayer
 
 
 class RCNN(Model):
-    def __init__(self, n_in, n_filters, filter_sizes, n_out, pool_sizes=None, n_hidden=(), downsample=1, ccf=False,
+    def __init__(self, n_in, n_filters, filter_sizes, n_out, pool_sizes=None, n_hidden=(), ccf=False,
                  rcl=(), rcl_dropout=0.0, trans_func=rectify, out_func=softmax, dropout_probability=0.0,
                  batch_norm=False, stats=0):
         super(RCNN, self).__init__(n_in, n_hidden, n_out, trans_func)
@@ -39,12 +39,6 @@ class RCNN(Model):
         sigma = 0.05
         self.log += "\nGaussian input noise: %02f" % sigma
         l_prev = GaussianNoiseLayer(l_prev, sigma=sigma)
-
-        # Downsample input
-        if downsample > 1:
-            self.log += "\nDownsampling with a factor of %d" % downsample
-            l_prev = FeaturePoolLayer(l_prev, pool_size=downsample, pool_function=T.mean, name="Downsample")
-            sequence_length /= downsample
 
         if ccf:
             self.log += "\nAdding cross-channel feature layer"

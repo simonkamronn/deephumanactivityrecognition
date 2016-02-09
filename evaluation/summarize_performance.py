@@ -22,27 +22,28 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--cv', action='store_true')
 parser.add_argument('--today', action='store_true')
 parser.add_argument('--dataset', type=str, default='')
-
+parser.add_argument('--model', type=str, default='')
 
 def main(argv):
     args = parser.parse_args(argv)
 
     today_only = args.today
     dataset = args.dataset
+    model = args.model
 
     if args.cv:
-        cv_lookup(today_only, dataset)
+        cv_lookup(today_only, dataset=dataset, model=model)
     else:
-        single_lookup(today_only, dataset)
+        single_lookup(today_only, dataset=dataset)
 
 
-def cv_lookup(today_only=False, dataset='', print_out=True):
+def cv_lookup(today_only=False, dataset='', print_out=True, model=''):
     d = {label: [] for label in labels}
     for sub_dir in sub_dirs:
         validation_file = model_directory + '/' + sub_dir + '/training evaluations/evaluationvalidation_dict.pkl'
         test_file = model_directory + '/' + sub_dir + '/training evaluations/evaluationtest_dict.pkl'
         train_file = model_directory + '/' + sub_dir + '/training evaluations/evaluationtrain_dict.pkl'
-        if os.path.exists(validation_file) and 'cv' in sub_dir and dataset in sub_dir:
+        if os.path.exists(validation_file) and all(x in sub_dir for x in ['cv', dataset, model]):
             validations = np.asarray(pkl.load(open(validation_file, "rb")).values())
             if validations.shape[1] < 2:
                 validations = np.asarray(pkl.load(open(test_file, "rb")).values())

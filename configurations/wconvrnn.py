@@ -10,7 +10,7 @@ from sklearn.cross_validation import LeavePLabelOut, StratifiedKFold, Stratified
 import numpy as np
 
 def main():
-    n_samples, step = 25, 25
+    n_samples, step = 100, 100
     load_data = LoadHAR(add_pitch=True, add_roll=True, add_filter=True, n_samples=n_samples,
                         step=step, normalize='segments', comp_magnitude=False, simple_labels=True, common_labels=True)
     factor = 10
@@ -27,10 +27,10 @@ def main():
         print('Testing user: %s' % user)
     else:
         # Cross validate on users
-        # conf.cv = LeavePLabelOut(conf.users, p=1)
+        conf.cv = LeavePLabelOut(conf.users, p=1)
 
         # Divide into K folds balanced on labels
-        conf.cv = StratifiedKFold(np.argmax(conf.y, axis=1), n_folds=10)
+        # conf.cv = StratifiedKFold(np.argmax(conf.y, axis=1), n_folds=10)
 
         # And shuffle
         # conf.cv = StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=10, test_size=0.1, random_state=None)
@@ -46,7 +46,7 @@ def main():
                          filter_sizes=[3]*4,
                          pool_sizes=[0]*4,
                          n_hidden=[50, 50],
-                         conv_dropout=0.3,
+                         conv_dropout=0.5,
                          conv_stride=2,
                          rnn_in_dropout=0.0,
                          rnn_hid_dropout=0.0,
@@ -82,7 +82,7 @@ def main():
                            pickle_f_custom_freq=100,
                            f_custom_eval=None)
         train.pickle = False
-        train.write_to_logger("StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=10, test_size=0.1, random_state=None)")
+        # train.write_to_logger("StratifiedShuffleSplit(np.argmax(conf.y, axis=1), n_iter=10, test_size=0.1, random_state=None)")
 
         conf.run(train_index,
                  test_index,

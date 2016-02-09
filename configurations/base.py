@@ -24,6 +24,7 @@ class ModelConfiguration(object):
         self.n_features = None
         self.log = ''
         self.stats = 0
+        self.f_validate = None
 
     def load_datasets(self, datasets, label_limit=100):
         # Load all datasets and concatenate

@@ -150,12 +150,8 @@ class LoadHAR(object):
                 y = np.concatenate((y, t))
                 data_array = np.concatenate((data_array, segmented[:, :, :-1]))
                 users = np.concatenate((users, [(user)]*len(t)))
-        print('Data shape:', data_array.shape)
-        print('Target shape:', y.shape)
-        print('Unique targets: %d' % np.count_nonzero(np.unique(y.flatten()).astype('int')))
 
         if self.expand:
-            print("Expanding targets")
             y = expand_target(y, data_array.shape[1])
 
         # Add features to data
