@@ -156,7 +156,7 @@ class wconvRNN(Model):
         )
 
         f_test = theano.function(
-            [self.sym_batchsize], [loss_eval, loss_acc],
+            [self.sym_index, self.sym_batchsize], [loss_eval, loss_acc],
             givens={
                 self.sym_x: self.sh_test_x,
                 self.sym_t: self.sh_test_t,

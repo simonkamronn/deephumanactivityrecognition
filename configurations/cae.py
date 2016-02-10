@@ -2,7 +2,7 @@ from os import rmdir, path
 import shutil
 from lasagne.nonlinearities import rectify
 from data_preparation.load_data import LoadHAR
-from models.fcae import CAE
+from models.cae import CAE
 from training.train import TrainModel
 from utils import env_paths as paths
 from sklearn.cross_validation import LeaveOneLabelOut, StratifiedShuffleSplit
@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 plt.ioff()
 
 def main():
-    n_samples, step = 200, 200
+    n_samples, step = 100, 100
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, lowpass=None,
                         step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
 
@@ -44,9 +44,9 @@ def main():
     n_train_batches = n_train//batch_size
 
     model = CAE(n_in=(int(n_samples), int(n_features)),
-                filters=[128, 256, 32],
+                filters=[64, 32],
                 pool_sizes=[0],
-                n_hidden=[0],
+                n_hidden=32,
                 n_out=0,
                 trans_func=rectify,
                 stats=0)

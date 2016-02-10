@@ -10,7 +10,7 @@ from sklearn.cross_validation import LeavePLabelOut, StratifiedKFold, Stratified
 import numpy as np
 
 def main():
-    n_samples, step = 100, 100
+    n_samples, step = 25, 25
     load_data = LoadHAR(add_pitch=True, add_roll=True, add_filter=True, n_samples=n_samples,
                         step=step, normalize='segments', comp_magnitude=False, simple_labels=True, common_labels=True)
     factor = 10
@@ -91,7 +91,8 @@ def main():
                  model=model,
                  train=train,
                  load_data=load_data,
-                 factor=factor)
+                 factor=factor,
+                 batch_size=64)
 
 if __name__ == "__main__":
     main()
