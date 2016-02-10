@@ -16,7 +16,7 @@ GRAD_CLIP = 5
 
 
 class CAE(Model):
-    def __init__(self, n_in, n_hidden, n_out, filters, pool_sizes, stats=2, conv_stride=1,
+    def __init__(self, n_in, n_hidden, n_out, filters, stats=2, conv_stride=1,
                  trans_func=rectify, conv_dropout=0.0):
         super(CAE, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.log = ""
@@ -51,24 +51,22 @@ class CAE(Model):
             ret['depool%d' % (n_filters - idx)] = layer = InverseLayer(layer, ret['pool%d' % (n_filters - idx)])
             ret['deconv%d' % (n_filters - idx)] = layer = bn(Conv2DLayer(layer, num_filters=num_filters, filter_size=(3, 1)))
 
-        ret['depool0'] = layer = InverseLayer(layer, ret['pool%d' % 1])
-        ret['deconv0'] = layer = Conv2DLayer(layer, num_filters=1, filter_size=(3, 1), nonlinearity=None)
+        ret['depool1'] = layer = InverseLayer(layer, ret['pool%d' % 1])
+        ret['deconv1'] = layer = Conv2DLayer(layer, num_filters=1, filter_size=(3, 1), nonlinearity=None)
         ret['output'] = layer = ReshapeLayer(layer, (-1, sequence_length, n_features))
-        print("CAE out shape", get_output_shape(layer))
+        print("FCAE out shape", get_output_shape(layer))
 
         self.model = ret['output']
         self.model_params = get_all_params(self.model)
         self.sym_x = T.tensor3('x')
 
-        for layer in ret:
-            print(layer, ret[layer].output_shape)
 
     def build_model(self, train_set, test_set, validation_set=None):
         super(CAE, self).build_model(train_set, test_set, validation_set)
 
         y_train = get_output(self.model, self.sym_x)
         loss = aggregate(squared_error(y_train, self.sym_x), mode='mean')
-        # loss += + 1e-4 * lasagne.regularization.regularize_network_params(self.model, lasagne.regularization.l2)
+        loss += + 1e-4 * lasagne.regularization.regularize_network_params(self.model, lasagne.regularization.l2)
 
         y_test = get_output(self.model, self.sym_x, deterministic=True)
         loss_test = aggregate(squared_error(y_test, self.sym_x), mode='mean')

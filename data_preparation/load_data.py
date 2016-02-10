@@ -36,7 +36,7 @@ else:
 class LoadHAR(object):
     def __init__(self, root_folder=ROOT_FOLDER, add_pitch=False, add_roll=False, expand=False,
                  add_filter=False, n_samples=200, step=200, normalize='channels', comp_magnitude=False,
-                 simple_labels=False, common_labels=True, lowpass=None):
+                 simple_labels=False, common_labels=True, lowpass=None, diff=False):
         self.root_folder = root_folder
         if root_folder is None:
             raise RuntimeError('Invalid folder')
@@ -53,6 +53,7 @@ class LoadHAR(object):
         self.simple_labels = simple_labels
         self.common_labels = common_labels
         self.lowpass = lowpass
+        self.differentiate = diff
 
     def uci_hapt(self):
         """
@@ -530,6 +531,11 @@ class LoadHAR(object):
         if add_roll: data = np.concatenate((data, rolls), axis=2)
         if add_pitch: data = np.concatenate((data, pitches), axis=2)
         if add_filter: data = np.concatenate((data, tmp_lp), axis=2)
+
+        if self.differentiate:
+            n_win, n_samp, n_dim = data.shape
+            data_diff = np.concatenate((np.zeros((1, n_dim)), np.diff(data.reshape(-1, n_dim), axis=0)), axis=0)
+            data = data_diff.reshape(n_win, n_samp, n_dim)
 
         if normalise == 'channels':
             n_win, n_samp, n_dim = data.shape

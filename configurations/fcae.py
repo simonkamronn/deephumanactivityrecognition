@@ -2,7 +2,7 @@ from os import rmdir, path
 import shutil
 from lasagne.nonlinearities import rectify
 from data_preparation.load_data import LoadHAR
-from models.fcae import CAE
+from models.fcae import FCAE
 from training.train import TrainModel
 from utils import env_paths as paths
 from sklearn.cross_validation import LeaveOneLabelOut, StratifiedShuffleSplit
@@ -43,13 +43,13 @@ def main():
     n_test_batches = n_test//batch_size
     n_train_batches = n_train//batch_size
 
-    model = CAE(n_in=(int(n_samples), int(n_features)),
-                filters=[128, 256, 32],
-                pool_sizes=[0],
-                n_hidden=[0],
-                n_out=0,
-                trans_func=rectify,
-                stats=0)
+    model = FCAE(n_in=(int(n_samples), int(n_features)),
+                 filters=[256, 128, 32],
+                 pool_sizes=[0],
+                 n_hidden=[0],
+                 n_out=0,
+                 trans_func=rectify,
+                 stats=0)
 
     # Build model
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,

@@ -14,7 +14,7 @@ plt.ioff()
 
 def main():
     n_samples, step = 100, 100
-    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, lowpass=None,
+    load_data = LoadHAR(add_pitch=True, add_roll=True, add_filter=False, n_samples=n_samples, lowpass=10, diff=True,
                         step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
 
     X, y, name, users, stats = load_data.uci_hapt()
@@ -44,10 +44,9 @@ def main():
     n_train_batches = n_train//batch_size
 
     model = CAE(n_in=(int(n_samples), int(n_features)),
-                filters=[64, 32],
-                pool_sizes=[0],
+                filters=[128, 64, 32],
                 n_hidden=32,
-                n_out=0,
+                n_out=n_samples,
                 trans_func=rectify,
                 stats=0)
 

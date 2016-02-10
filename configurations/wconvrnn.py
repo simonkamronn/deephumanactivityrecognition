@@ -11,7 +11,7 @@ import numpy as np
 
 def main():
     n_samples, step = 25, 25
-    load_data = LoadHAR(add_pitch=True, add_roll=True, add_filter=True, n_samples=n_samples,
+    load_data = LoadHAR(add_pitch=True, add_roll=True, add_filter=True, n_samples=n_samples, diff=True,
                         step=step, normalize='segments', comp_magnitude=False, simple_labels=True, common_labels=True)
     factor = 10
 

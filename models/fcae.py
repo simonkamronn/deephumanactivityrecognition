@@ -15,10 +15,10 @@ CONST_FORGET_B = 1.
 GRAD_CLIP = 5
 
 
-class CAE(Model):
+class FCAE(Model):
     def __init__(self, n_in, n_hidden, n_out, filters, pool_sizes, stats=2, conv_stride=1,
                  trans_func=rectify, conv_dropout=0.0):
-        super(CAE, self).__init__(n_in, n_hidden, n_out, trans_func)
+        super(FCAE, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.log = ""
 
         # Overwrite input layer
@@ -53,14 +53,14 @@ class CAE(Model):
 
         ret['deconv0'] = layer = Conv2DLayer(layer, num_filters=1, filter_size=(3, 1), nonlinearity=None)
         ret['output'] = layer = ReshapeLayer(layer, (-1, sequence_length, n_features))
-        print("CAE out shape", get_output_shape(layer))
+        print("FCAE out shape", get_output_shape(layer))
 
         self.model = ret['output']
         self.model_params = get_all_params(self.model)
         self.sym_x = T.tensor3('x')
 
     def build_model(self, train_set, test_set, validation_set=None):
-        super(CAE, self).build_model(train_set, test_set, validation_set)
+        super(FCAE, self).build_model(train_set, test_set, validation_set)
 
         y_train = get_output(self.model, self.sym_x)
         loss = aggregate(squared_error(y_train, self.sym_x), mode='mean')
