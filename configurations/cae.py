@@ -1,6 +1,6 @@
 from os import rmdir, path
 import shutil
-from lasagne.nonlinearities import rectify
+from lasagne.nonlinearities import rectify, leaky_rectify
 from data_preparation.load_data import LoadHAR
 from models.cae import CAE
 from training.train import TrainModel
@@ -13,13 +13,13 @@ import matplotlib.pyplot as plt
 plt.ioff()
 
 def main():
-    n_samples, step = 100, 100
-    load_data = LoadHAR(add_pitch=True, add_roll=True, add_filter=False, n_samples=n_samples, lowpass=10, diff=True,
+    n_samples, step = 50, 25
+    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, lowpass=10, diff=False,
                         step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
 
     X, y, name, users, stats = load_data.uci_hapt()
     users = ['%s%02d' % (name, user) for user in users]
-    limited_labels = y < 20
+    limited_labels = y < 6  # No transitions
     y = y[limited_labels]
     X = X[limited_labels].astype('float32')
     users = np.char.asarray(users)[limited_labels]
@@ -44,10 +44,10 @@ def main():
     n_train_batches = n_train//batch_size
 
     model = CAE(n_in=(int(n_samples), int(n_features)),
-                filters=[128, 64, 32],
-                n_hidden=32,
+                filters=[16, 32, 64, 128],
+                n_hidden=128,
                 n_out=n_samples,
-                trans_func=rectify,
+                trans_func=leaky_rectify,
                 stats=0)
 
     # Build model
@@ -82,11 +82,13 @@ def main():
     train.write_to_logger("Normalizing: %s" % load_data.normalize)
     train.write_to_logger("Simple labels: %s" % load_data.simple_labels)
     train.write_to_logger("Common labels: %s" % load_data.common_labels)
+    train.write_to_logger("Sequence length: %d" % load_data.n_samples)
     train.write_to_logger("Step: %d" % load_data.step)
     train.write_to_logger("Add pitch: %s\nAdd roll: %s" % (load_data.add_pitch, load_data.add_roll))
     train.write_to_logger("Only magnitude: %s" % load_data.comp_magnitude)
     train.write_to_logger("Lowpass: %s" % str(load_data.lowpass))
     train.write_to_logger("Add filter separated signals: %s" % load_data.add_filter)
+    train.write_to_logger("Differentiate: %s" % load_data.differentiate)
 
     test_args['inputs']['batchsize'] = batch_size
     train_args['inputs']['batchsize'] = batch_size
@@ -101,6 +103,11 @@ def main():
                       n_train_batches=n_train_batches,
                       n_test_batches=n_test_batches,
                       n_epochs=2000)
+
+    # Copy script to output folder
+    scriptpath = path.realpath(__file__)
+    filename = path.basename(scriptpath)
+    shutil.copy(scriptpath, model.root_path + '/' + filename)
 
 if __name__ == "__main__":
     main()

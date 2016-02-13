@@ -3,7 +3,7 @@ theano.config.floatX = 'float32'
 import theano.tensor as T
 import lasagne
 from base import Model
-from lasagne_extensions.nonlinearities import rectify, softmax, sigmoid
+from lasagne_extensions.nonlinearities import rectify, softmax, sigmoid, leaky_rectify
 from lasagne.objectives import aggregate, squared_error
 from lasagne.layers import *
 from lasagne import init
@@ -37,24 +37,32 @@ class CAE(Model):
         ret = {}
         n_filters = len(filters)
         for idx, num_filters in enumerate(filters):
-            ret['conv%d' % (idx+1)] = layer = bn(Conv2DLayer(layer, num_filters=num_filters, filter_size=(3, 1), pad='full'))
-            ret['pool%d' % (idx+1)] = layer = MaxPool2DLayer(layer, pool_size=(2, 1))
-        print("Encoding input", layer.output_shape)
+            ret['conv%d' % (idx+1)] = layer = bn(Conv2DLayer(layer, num_filters=num_filters, filter_size=(3, 1), pad='full', W=init.GlorotNormal('relu'), nonlinearity=trans_func))
+            if idx < n_filters - 1:
+                ret['pool%d' % (idx+1)] = layer = MaxPool2DLayer(layer, pool_size=(2, 1))
+            print("Convolution+pooling output", layer.output_shape)
+        ret['global_pool'] = layer = GlobalPoolLayer(layer)
 
-        s1, s2, s3, s4 = layer.output_shape
+        print("Encoding layer input", layer.output_shape)
+        # s1, s2, s3, s4 = layer.output_shape
         # ret['flatten'] = layer = ReshapeLayer(layer, (-1, s2*s3*s4))
-        ret['enc'] = layer = bn(DenseLayer(layer, num_units=n_hidden))
-        ret['hidden'] = layer = bn(DenseLayer(layer, num_units=s2*s3*s4))
-        ret['unflatten'] = layer = ReshapeLayer(layer, (-1, s2, s3, s4))
+        ret['enc'] = layer = bn(DenseLayer(layer, num_units=n_hidden, nonlinearity=trans_func))
+
+        print("Decoding input", layer.output_shape)
+        ret['hidden'] = layer = bn(DenseLayer(layer, num_units=filters[-1], nonlinearity=trans_func))
+        # ret['unflatten'] = layer = ReshapeLayer(layer, (-1, filters[-1], 1, 1))
+
+        ret['depoolglobal'] = layer = bn(InverseLayer(layer, ret['global_pool']))
+        print("Global depool output", layer.output_shape)
 
         for idx, num_filters in enumerate(filters[::-1][1:]):
-            ret['depool%d' % (n_filters - idx)] = layer = InverseLayer(layer, ret['pool%d' % (n_filters - idx)])
-            ret['deconv%d' % (n_filters - idx)] = layer = bn(Conv2DLayer(layer, num_filters=num_filters, filter_size=(3, 1)))
+            ret['deconv%d' % (n_filters - idx)] = layer = bn(Conv2DLayer(layer, num_filters=num_filters, filter_size=(3, 1), W=init.GlorotNormal('relu'), nonlinearity=trans_func))
+            ret['depool%d' % (n_filters - idx - 1)] = layer = InverseLayer(layer, ret['pool%d' % (n_filters - idx - 1)])
 
-        ret['depool1'] = layer = InverseLayer(layer, ret['pool%d' % 1])
+        # ret['depool1'] = layer = InverseLayer(layer, ret['pool%d' % 1])
         ret['deconv1'] = layer = Conv2DLayer(layer, num_filters=1, filter_size=(3, 1), nonlinearity=None)
         ret['output'] = layer = ReshapeLayer(layer, (-1, sequence_length, n_features))
-        print("FCAE out shape", get_output_shape(layer))
+        print("CAE out shape", get_output_shape(layer))
 
         self.model = ret['output']
         self.model_params = get_all_params(self.model)
