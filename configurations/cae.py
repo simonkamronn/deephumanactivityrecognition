@@ -44,8 +44,8 @@ def main():
     n_train_batches = n_train//batch_size
 
     model = CAE(n_in=(int(n_samples), int(n_features)),
-                filters=[16, 32, 64, 128],
-                n_hidden=128,
+                filters=[8, 16, 32, 64],
+                n_hidden=64,
                 n_out=n_samples,
                 trans_func=leaky_rectify,
                 stats=0)

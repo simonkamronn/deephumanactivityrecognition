@@ -14,9 +14,9 @@ plt.ioff()
 
 
 def run_adgmssl():
-    n_samples, step = 50, 50
-    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False,
-                        n_samples=n_samples, step=step, normalize=True)
+    n_samples, step = 50, 25
+    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, lowpass=10, diff=False,
+                        step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
 
     # datasets = [load_data.uci_hapt, load_data.idash, load_data.uci_mhealth]
     X, y, name, users, stats = load_data.uci_hapt()
@@ -26,6 +26,7 @@ def run_adgmssl():
     y = y[limited_labels]
     X = X[limited_labels]
     users = users[limited_labels]
+    y_unique = np.unique(y)
     y = one_hot(y)
 
     # Reshape input samples to be a vector instead of samples x features
@@ -96,15 +97,31 @@ def run_adgmssl():
 
         cm = confusion_matrix(t_class, y_class)
         cm = cm.astype('float') / (cm.sum(axis=1)[:, np.newaxis] + 1e-6)
-        # plt.clf()
-        im = axarr[1].imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
-        # plt.colorbar(im, cax=axarr[3], ticks=MultipleLocator(1), format="%.2f")
+        axarr[1].imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)
         axarr[1].set_ylabel('True')
         axarr[1].set_xlabel('Predicted')
 
         fig.set_size_inches(18, 10)
         fig.savefig(path, dpi=100)
         plt.close(fig)
+
+        # Plot reconstruction
+        plt.clf()
+        f, axarr = plt.subplots(nrows=len(y_unique), ncols=1)
+        for idx, y_l in enumerate(y_unique):
+            act_idx = np.argmax(y_test, axis=1) == y_l
+            test_act = test_set[0][act_idx]
+            test_y = test_set[1][act_idx]
+
+            z = model.fz(test_act, test_y, 1).eval()
+            x_hat = model.f_xhat(z, test_y, 1).eval()
+
+            axarr[idx].plot(test_act[0], color='red')
+            axarr[idx].plot(x_hat[0], color='blue', linestyle='dotted')
+
+        f.set_size_inches(12, 20)
+        f.savefig(path.strip('.png') + '_fit.png', dpi=100)
+        plt.close(f)
 
     # Define training loop. Output training evaluations every 1 epoch and the approximated good estimate
     # of the classification error every 10 epochs.
@@ -113,6 +130,16 @@ def run_adgmssl():
 
     train.add_initial_training_notes("Training the auxiliary deep generative model with %i labels." % n_labelled_samples)
     train.write_to_logger("Using reduced HAPT dataset with Walking, Stairs, Inactive classes")
+    train.write_to_logger("Normalizing: %s" % load_data.normalize)
+    train.write_to_logger("Simple labels: %s" % load_data.simple_labels)
+    train.write_to_logger("Common labels: %s" % load_data.common_labels)
+    train.write_to_logger("Sequence length: %d" % load_data.n_samples)
+    train.write_to_logger("Step: %d" % load_data.step)
+    train.write_to_logger("Add pitch: %s\nAdd roll: %s" % (load_data.add_pitch, load_data.add_roll))
+    train.write_to_logger("Only magnitude: %s" % load_data.comp_magnitude)
+    train.write_to_logger("Lowpass: %s" % str(load_data.lowpass))
+    train.write_to_logger("Add filter separated signals: %s" % load_data.add_filter)
+    train.write_to_logger("Differentiate: %s" % load_data.differentiate)
     train.train_model(f_train, train_args,
                       f_test, test_args,
                       f_validate, validate_args,

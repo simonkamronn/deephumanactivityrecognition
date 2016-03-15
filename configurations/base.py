@@ -160,7 +160,7 @@ class ModelConfiguration(object):
         train.write_to_logger("Add pitch: %s\nAdd roll: %s" % (load_data.add_pitch, load_data.add_roll))
         train.write_to_logger("Only magnitude: %s" % load_data.comp_magnitude)
         train.write_to_logger("Add filter separated signals: %s" % load_data.add_filter)
-        train.write_to_logger("Differentiate: %s" % load_data.diff)
+        train.write_to_logger("Differentiate: %s" % load_data.differentiate)
         train.write_to_logger("Transfer function: %s" % model.transf)
         # train.write_to_logger("Network Architecture ---------------")
         # for layer in get_all_layers(model.model):

@@ -45,8 +45,8 @@ class wconvRNN(Model):
         l_prev = DimshuffleLayer(l_prev, (0, 3, 2, 1))
 
         # Add input noise
-        self.log += "\nAdding noise layer: 0.05"
-        l_prev = GaussianNoiseLayer(l_prev, sigma=0.05)
+        # self.log += "\nAdding noise layer: 0.05"
+        # l_prev = GaussianNoiseLayer(l_prev, sigma=0.05)
 
         # Adding convolutional layers
         print("Conv input shape", get_output_shape(l_prev))

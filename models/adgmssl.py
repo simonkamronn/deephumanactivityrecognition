@@ -397,7 +397,6 @@ class ADGMSSL(Model):
             givens = {self.sym_x_u: self.sh_train_x}
             self.f_collect = theano.function(inputs=inputs, outputs=collect, givens=givens)
 
-
         return f_train, f_test, f_validate, self.train_args, self.test_args, self.validate_args
 
     def _classification_error(self, x, t):

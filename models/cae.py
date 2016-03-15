@@ -68,7 +68,6 @@ class CAE(Model):
         self.model_params = get_all_params(self.model)
         self.sym_x = T.tensor3('x')
 
-
     def build_model(self, train_set, test_set, validation_set=None):
         super(CAE, self).build_model(train_set, test_set, validation_set)
 

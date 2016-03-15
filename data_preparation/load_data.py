@@ -546,16 +546,30 @@ class LoadHAR(object):
 
         elif normalise == 'segments':
             n_win, n_samp, n_dim = data.shape
-            for idx in range(data.shape[0]):
-                data_mean = data[idx].mean(axis=0)
-                data_std = data[idx].std(axis=0)
-                data[idx] = data[idx] - data_mean
+            # for idx in range(n_win):
+            #     data_mean = data[idx].mean(axis=0)
+            #     data_std = data[idx].std(axis=0)
+            #     data[idx] = data[idx] - data_mean
+            #
+            #     # Only normalise std for segments with actual signal
+            #     if data_std.mean() > 0.1:
+            #         data[idx] = data[idx] / data_std
+            #
+            #     stats.append([data_mean, data_std])
 
-                # Only normalise std for segments with actual signal
-                if data_std.mean() > 0.1:
-                    data[idx] = data[idx] / data_std
+            # Min-max scaler
+            for idx in range(n_win):
+                data_min = data[idx].min(axis=0)
+                data_max = data[idx].max(axis=0)
+                data_range = data_max - data_min
 
-                stats.append([data_mean, data_std])
+                data[idx] = data[idx] - data_min
+
+                # Only normalise segments with actual signal
+                if data_range.mean() > 0.1:
+                    data[idx] = data[idx] / data_range
+
+                stats.append([data_min, data_max, data_range])
             stats = np.array(stats)
 
         return data, stats
