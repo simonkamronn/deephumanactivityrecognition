@@ -44,8 +44,9 @@ class VAE(Model):
         l_z_x = l_x_in
         for hid in z_hidden:
             l_z_x = DenseLayer(l_z_x, hid, init.Normal(std=init_w), init.Normal(std=init_w), self.transf)
+        l_z_x, l_z_x_mu, l_z_x_logvar = stochastic_layer(l_z_x, n_z, self.sym_samples)
 
-        l_z_x, l_z_x_logvar, l_z_x_mu = stochastic_layer(l_z_x, n_z, self.sym_samples)
+        # Reshape for density layers
         l_z_x_reshaped = ReshapeLayer(l_z_x, (-1, self.sym_samples, n_z))
         l_z_x_mu_reshaped = DimshuffleLayer(l_z_x_mu, (0, 'x', 1))
         l_z_x_logvar_reshaped = DimshuffleLayer(l_z_x_logvar, (0, 'x', 1))

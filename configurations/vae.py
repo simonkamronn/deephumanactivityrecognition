@@ -60,7 +60,7 @@ def run_vae():
     bs = n / n_batches  # The batchsize.
 
     # Initialize the auxiliary deep generative model.
-    model = VAE(n_x=int(n_x), n_z=64, z_hidden=[64], xhat_hidden=[64], x_dist='gaussian')
+    model = VAE(n_x=int(n_x), n_z=16, z_hidden=[16], xhat_hidden=[32], x_dist='gaussian')
 
     # Get the training functions.
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)
