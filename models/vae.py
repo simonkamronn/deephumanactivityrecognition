@@ -32,6 +32,11 @@ class VAE(Model):
         self.sym_samples = T.iscalar('samples')
         self._srng = RandomStreams()
 
+        def stochastic_layer(layer_in, n, samples, nonlin=None):
+            mu = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
+            logvar = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
+            return SampleLayer(mu, logvar, eq_samples=samples, iw_samples=1), mu, logvar
+
         # Input
         l_x_in = InputLayer((None, n_x))
 
@@ -39,9 +44,8 @@ class VAE(Model):
         l_z_x = l_x_in
         for hid in z_hidden:
             l_z_x = DenseLayer(l_z_x, hid, init.Normal(std=init_w), init.Normal(std=init_w), self.transf)
-        l_z_x_mu = DenseLayer(l_z_x, n_z, init.Normal(std=init_w), init.Normal(std=init_w), None)
-        l_z_x_logvar = DenseLayer(l_z_x, n_z, init.Normal(std=init_w), init.Normal(std=init_w), None)
-        l_z_x = SampleLayer(l_z_x_mu, l_z_x_logvar, eq_samples=self.sym_samples)
+
+        l_z_x, l_z_x_logvar, l_z_x_mu = stochastic_layer(l_z_x, n_z, self.sym_samples)
         l_z_x_reshaped = ReshapeLayer(l_z_x, (-1, self.sym_samples, n_z))
         l_z_x_mu_reshaped = DimshuffleLayer(l_z_x_mu, (0, 'x', 1))
         l_z_x_logvar_reshaped = DimshuffleLayer(l_z_x_logvar, (0, 'x', 1))
@@ -55,9 +59,7 @@ class VAE(Model):
             l_xhat_z_logvar_reshaped = None
             l_xhat_z = DenseLayer(l_xhat_z, n_x, init.Normal(std=init_w), init.Normal(std=init_w), sigmoid)
         elif x_dist == 'gaussian':
-            l_xhat_z_mu = DenseLayer(l_xhat_z, n_x, init.Normal(std=init_w), init.Normal(std=init_w), None)
-            l_xhat_z_logvar = DenseLayer(l_xhat_z, n_x, init.Normal(std=init_w), init.Normal(std=init_w), None)
-            l_xhat_z = SampleLayer(l_xhat_z_mu, l_xhat_z_logvar, eq_samples=1)
+            l_xhat_z, l_xhat_z_mu, l_xhat_z_logvar = stochastic_layer(l_xhat_z, n_x, self.sym_samples)
             l_xhat_z_mu_reshaped = ReshapeLayer(l_xhat_z_mu, (-1, self.sym_samples, 1, n_x))
             l_xhat_z_logvar_reshaped = ReshapeLayer(l_xhat_z_logvar, (-1, self.sym_samples, 1, n_x))
         l_xhat_z_reshaped = ReshapeLayer(l_xhat_z, (-1, self.sym_samples, 1, n_x))
