@@ -18,11 +18,11 @@ def run_vrae_har():
         X = np.linspace(-np.pi*(samples/period), np.pi*(samples/period), samples)
         X = np.reshape(np.sin(X), (-1, length, 1))
         X += np.random.randn(*X.shape)*0.1
-        # X = (X - np.min(X))/(np.max(X) - np.min(X))
+        X = (X - np.min(X))/(np.max(X) - np.min(X))
         return X, np.ones((samples/length, 1))
 
-    X1, y1 = sinus_seq(40, 100000, 50)
-    X2, y2 = sinus_seq(20, 40000, 50)
+    X1, y1 = sinus_seq(5, 100000, 10)
+    X2, y2 = sinus_seq(4, 40000, 10)
 
     X = np.concatenate((X1, X2)).astype('float32')
     y = np.concatenate((y1*0, y2*1), axis=0).astype('int')[:, 0]
@@ -84,18 +84,28 @@ def run_vrae_har():
     def custom_evaluation(model, path):
 
         plt.clf()
-        f, axarr = plt.subplots(nrows=len(y_unique), ncols=1)
+        f, axarr = plt.subplots(nrows=len(y_unique), ncols=2)
         for idx, y_l in enumerate(y_unique):
             act_idx = np.argmax(test_set[1], axis=1) == y_l
             test_act = test_set[0][act_idx]
 
-            z = model.f_qz(test_act, 1)
-            xhat = model.f_px(z, 1)
+            # z = model.f_qz(test_act, 1)
+            # xhat = model.f_px(z, 1)
+            # mu = model.f_mu(z, 1)
+            # var = np.exp(model.f_var(z, 1))
 
-            axarr[idx].plot(test_act[:3].reshape(-1, dim_features), color='red')
-            axarr[idx].plot(xhat[:3].reshape(-1, dim_features), color='blue', linestyle='dotted')
+            xhat = model.f_px(test_act, 1)
+            mu = model.f_mu(test_act, 1)
+            var = np.exp(model.f_var(test_act, 1))
 
-        f.set_size_inches(8, 10)
+            axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red')
+            axarr[idx, 0].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted')
+
+            axarr[idx, 1].plot(mu[:2].reshape(-1, dim_features))
+            axarr[idx, 1].plot(var[:2].reshape(-1, dim_features))
+
+        plt.legend(loc=3)
+        f.set_size_inches(12, 10)
         f.savefig(path, dpi=100, format='png')
         plt.close(f)
 
@@ -107,7 +117,7 @@ def run_vrae_har():
                       f_test, test_args,
                       f_validate, validate_args,
                       n_train_batches=n_batches,
-                      n_epochs=1000,
+                      n_epochs=10000,
                       # Any symbolic model variable can be annealed during
                       # training with a tuple of (var_name, every, scale constant, minimum value).
                       anneal=[("learningrate", 200, 0.75, 3e-5)])

@@ -101,7 +101,7 @@ class RVAE(Model):
         l_qz = l_enc
         for hid in qz_hid:
             l_qz = dense_layer(l_qz, hid)
-        l_qz, l_qz_mu, l_qz_logvar = stochastic_layer(l_qz, n_z, self.sym_samples)
+        l_qz, l_qz_mu, l_qz_logvar = stochastic_layer(l_qz, n_z, self.sym_samples, sigmoid)
 
         # Generative p(x|z)
         l_qz_repeat = RepeatLayer(l_qz, n=seq_length)
@@ -144,12 +144,27 @@ class RVAE(Model):
 
         # Predefined functions
         inputs = {self.l_x_in: self.sym_x}
-        outputs = get_output(self.l_qz, inputs, deterministic=True).mean(axis=(1, 2))
+        outputs = get_output(l_qz, inputs, deterministic=True)
         self.f_qz = theano.function([self.sym_x, self.sym_samples], outputs)
 
-        inputs = {l_qz: self.sym_z}
+        # inputs = {l_qz: self.sym_z}
+        # outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(1, 2))
+        # self.f_px = theano.function([self.sym_z, self.sym_samples], outputs)
+        #
+        # outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(1, 2))
+        # self.f_mu = theano.function([self.sym_z, self.sym_samples], outputs)
+        #
+        # outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(1, 2))
+        # self.f_var = theano.function([self.sym_z, self.sym_samples], outputs)
+
         outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(1, 2))
-        self.f_px = theano.function([self.sym_z, self.sym_samples], outputs)
+        self.f_px = theano.function([self.sym_x, self.sym_samples], outputs)
+
+        outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(1, 2))
+        self.f_mu = theano.function([self.sym_x, self.sym_samples], outputs)
+
+        outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(1, 2))
+        self.f_var = theano.function([self.sym_x, self.sym_samples], outputs)
 
         # Define model parameters
         self.model_params = get_all_params([self.l_px])
@@ -221,7 +236,7 @@ class RVAE(Model):
         # Add reconstruction cost
         if not self.x_dist == 'linear':
             x_hat = get_output(self.l_px, inputs).mean(axis=(1, 2))
-            cost += aggregate(squared_error(x_hat, self.sym_x), mode='mean')
+            cost += 100*aggregate(squared_error(x_hat, self.sym_x), mode='mean')
 
         grads_collect = T.grad(cost, self.trainable_model_params)
         sym_beta1 = T.scalar('beta1')

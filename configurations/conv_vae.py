@@ -16,7 +16,7 @@ def run_conv_vae():
         X = np.linspace(-np.pi*(samples/period), np.pi*(samples/period), samples)
         X = np.reshape(np.sin(X), (-1, length, 1))
         X += np.random.randn(*X.shape)*0.1
-        # X = (X - np.min(X))/(np.max(X) - np.min(X))
+        X = (X - np.min(X))/(np.max(X) - np.min(X))
         return X, np.ones((samples/length, 1))
 
     X1, y1 = sinus_seq(40, 100000, 50)
@@ -76,18 +76,25 @@ def run_conv_vae():
 
     def custom_evaluation(model, path):
         plt.clf()
-        f, axarr = plt.subplots(nrows=len(np.unique(y)), ncols=1)
+        f, axarr = plt.subplots(nrows=len(np.unique(y)), ncols=2)
         for idx, y_l in enumerate(np.unique(y)):
             act_idx = test_set[1] == y_l
             test_act = test_set[0][act_idx[:, 0]]
 
-            z = model.f_qz(test_act, 1)
-            xhat = model.f_px(test_act, 1)
+            # z = model.f_qz(test_act, 1)
+            z = test_act
+            xhat = model.f_px(z, 1)
+            mu = model.f_mu(z, 1)
+            var = np.exp(model.f_var(z, 1))
 
-            axarr[idx].plot(test_act[:3].reshape(-1, dim_features), color='red')
-            axarr[idx].plot(xhat[:3].reshape(-1, dim_features), color='blue', linestyle='dotted')
+            axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red')
+            axarr[idx, 0].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted')
 
-        f.set_size_inches(8, 5)
+            axarr[idx, 1].plot(mu[:2].reshape(-1, dim_features), label="mu")
+            axarr[idx, 1].plot(var[:2].reshape(-1, dim_features), label="var")
+            plt.legend()
+
+        f.set_size_inches(12, 10)
         f.savefig(path, dpi=100, format='png')
         plt.close(f)
 

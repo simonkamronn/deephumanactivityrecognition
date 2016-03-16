@@ -146,16 +146,18 @@ class CVAE(Model):
 
         # Predefined functions
         inputs = {self.l_x_in: self.sym_x}
-        outputs = get_output(self.l_qz, inputs, deterministic=True).mean(axis=(1, 2))
+        outputs = get_output(l_qz, inputs, deterministic=True)
         self.f_qz = theano.function([self.sym_x, self.sym_samples], outputs)
-
-        # inputs = {l_qz: self.sym_z}
-        # outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=1)
-        # self.f_px = theano.function([self.sym_z, self.sym_samples], outputs).mean(axis=1)
 
         inputs = {self.l_x_in: self.sym_x}
         outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(1, 2))
         self.f_px = theano.function([self.sym_x, self.sym_samples], outputs)
+
+        outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(1, 2))
+        self.f_mu = theano.function([self.sym_x, self.sym_samples], outputs)
+
+        outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(1, 2))
+        self.f_var = theano.function([self.sym_x, self.sym_samples], outputs)
 
         # Define model parameters
         self.model_params = get_all_params([self.l_px])
@@ -224,10 +226,10 @@ class CVAE(Model):
         cost = ((lb.mean()) * n + weight_priors) / -n
         elbo = lb.mean()
 
-        # Add reconstruction cost
-        if not self.x_dist == 'linear':
-            x_hat = get_output(self.l_px, inputs)
-            cost += aggregate(squared_error(x_hat, self.sym_x), mode='mean')
+        # # Add reconstruction cost
+        # if not self.x_dist == 'linear':
+        #     x_hat = get_output(self.l_px, inputs).mean(axis=(1, 2))
+        #     cost += aggregate(squared_error(x_hat, self.sym_x), mode='mean')
 
         grads_collect = T.grad(cost, self.trainable_model_params)
         sym_beta1 = T.scalar('beta1')
