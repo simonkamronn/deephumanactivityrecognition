@@ -236,7 +236,7 @@ class RVAE(Model):
         # Add reconstruction cost
         if not self.x_dist == 'linear':
             x_hat = get_output(self.l_px, inputs).mean(axis=(1, 2))
-            cost += 1*aggregate(squared_error(x_hat, self.sym_x), mode='mean')
+            cost += 0*aggregate(squared_error(x_hat, self.sym_x), mode='mean')
 
         grads_collect = T.grad(cost, self.trainable_model_params)
         sym_beta1 = T.scalar('beta1')
