@@ -21,7 +21,7 @@ class RVAE(Model):
     Implementation of recurrent variational auto-encoder.
     """
 
-    def __init__(self, n_x, n_z, qz_hid, px_hid, enc_rnn=256, dec_rnn=256, max_seq_length=28,
+    def __init__(self, n_x, n_z, qz_hid, px_hid, enc_rnn=256, dec_rnn=256, seq_length=28,
                  nonlinearity=rectify, px_nonlinearity=None, x_dist='bernoulli', batchnorm=False, seed=1234):
         """
         Weights are initialized using the Bengio and Glorot (2010) initialization scheme.
@@ -37,7 +37,7 @@ class RVAE(Model):
         super(RVAE, self).__init__(n_x, qz_hid + px_hid, n_z, nonlinearity)
         self.x_dist = x_dist
         self.n_x = n_x
-        self.max_seq_length = max_seq_length
+        self.seq_length = seq_length
         self.n_z = n_z
         self.batchnorm = batchnorm
         self._srng = RandomStreams(seed)
@@ -55,7 +55,7 @@ class RVAE(Model):
 
         # Assist methods for collecting the layers
         def dense_layer(layer_in, n, dist_w=init.GlorotNormal, dist_b=init.Normal):
-            dense = DenseLayer(layer_in, n, dist_w(hid_w), dist_b(init_w), None)
+            dense = DenseLayer(layer_in, num_units=n, W=dist_w(hid_w), b=dist_b(init_w), nonlinearity=None)
             if batchnorm:
                 dense = BatchNormLayer(dense)
             return NonlinearityLayer(dense, self.transf)
@@ -88,11 +88,14 @@ class RVAE(Model):
             return lstm
 
         # RNN encoder implementation
-        l_x_in = InputLayer((None, None, n_x))
+        l_x_in = InputLayer((None, seq_length, n_x))
         l_enc_forward = lstm_layer(l_x_in, enc_rnn, return_final=True, backwards=False, name='enc_forward')
         l_enc_backward = lstm_layer(l_x_in, enc_rnn, return_final=True, backwards=True, name='enc_backward')
         l_enc_concat = ConcatLayer([l_enc_forward, l_enc_backward], axis=-1)
         l_enc = dense_layer(l_enc_concat, enc_rnn)
+
+        # # Overwrite encoder
+        # l_enc = dense_layer(l_x_in, enc_rnn)
 
         # Recognition q(z|x)
         l_qz = l_enc
@@ -100,29 +103,31 @@ class RVAE(Model):
             l_qz = dense_layer(l_qz, hid)
         l_qz, l_qz_mu, l_qz_logvar = stochastic_layer(l_qz, n_z, self.sym_samples)
 
-        # RNN decoder implementation
-        l_qz_repeat = RepeatLayer(l_qz, n=max_seq_length)
+        # Generative p(x|z)
+        l_qz_repeat = RepeatLayer(l_qz, n=seq_length)
         l_dec_forward = lstm_layer(l_qz_repeat, dec_rnn, return_final=False, backwards=False, name='dec_forward')
         l_dec_backward = lstm_layer(l_qz_repeat, dec_rnn, return_final=False, backwards=True, name='dec_backward')
         l_dec_concat = ConcatLayer([l_dec_forward, l_dec_backward], axis=-1)
         l_dec = ReshapeLayer(l_dec_concat, (-1, 2*dec_rnn))
         l_dec = dense_layer(l_dec, dec_rnn)
 
-        # Generative p(x|z)
+        # # Overwrite decoder
+        # l_dec = dense_layer(l_qz, seq_length)
+
+        # Add additional dense layers
         l_px = l_dec
         for hid in px_hid:
             l_px = dense_layer(l_px, hid)
 
+        # Reshape the last dimension and perhaps model with a distribution
         if x_dist == 'bernoulli':
             l_px = DenseLayer(l_px, n_x, init.GlorotNormal(), init.Normal(init_w), sigmoid)
         elif x_dist == 'multinomial':
             l_px = DenseLayer(l_px, n_x, init.GlorotNormal(), init.Normal(init_w), softmax)
         elif x_dist == 'gaussian':
-            l_px, l_px_mu, l_px_logvar = stochastic_layer(l_px, n_x, 1, px_nonlinearity)
+            l_px, l_px_mu, l_px_logvar = stochastic_layer(l_px, n_x, self.sym_samples, px_nonlinearity)
         elif x_dist == 'linear':
             l_px = DenseLayer(l_px, n_x, nonlinearity=None)
-
-        l_px = ReshapeLayer(l_px, (-1, max_seq_length, n_x))
 
         # Reshape all the model layers to have the same size
         self.l_x_in = l_x_in
@@ -131,17 +136,19 @@ class RVAE(Model):
         self.l_qz_mu = DimshuffleLayer(l_qz_mu, (0, 'x', 'x', 1))
         self.l_qz_logvar = DimshuffleLayer(l_qz_logvar, (0, 'x', 'x', 1))
 
-        self.l_px = ReshapeLayer(l_px, (-1, max_seq_length, self.sym_samples, 1, n_x))
-        self.l_px_mu = ReshapeLayer(l_px_mu, (-1, max_seq_length, self.sym_samples, 1, n_x)) if x_dist == "gaussian" else None
-        self.l_px_logvar = ReshapeLayer(l_px_logvar, (-1, max_seq_length, self.sym_samples, 1, n_x)) if x_dist == "gaussian" else None
+        self.l_px = DimshuffleLayer(ReshapeLayer(l_px, (-1, seq_length, self.sym_samples, 1, n_x)), (0, 2, 3, 1, 4))
+        self.l_px_mu = DimshuffleLayer(ReshapeLayer(l_px_mu, (-1, seq_length, self.sym_samples, 1, n_x)), (0, 2, 3, 1, 4)) \
+            if x_dist == "gaussian" else None
+        self.l_px_logvar = DimshuffleLayer(ReshapeLayer(l_px_logvar, (-1, seq_length, self.sym_samples, 1, n_x)), (0, 2, 3, 1, 4)) \
+            if x_dist == "gaussian" else None
 
         # Predefined functions
         inputs = {self.l_x_in: self.sym_x}
-        outputs = get_output(l_qz, inputs, deterministic=True)
+        outputs = get_output(self.l_qz, inputs, deterministic=True).mean(axis=(1, 2))
         self.f_qz = theano.function([self.sym_x, self.sym_samples], outputs)
 
         inputs = {l_qz: self.sym_z}
-        outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(2,3))
+        outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(1, 2))
         self.f_px = theano.function([self.sym_z, self.sym_samples], outputs)
 
         # Define model parameters
@@ -164,19 +171,19 @@ class RVAE(Model):
         l_log_qz = GaussianLogDensityLayer(self.l_qz, self.l_qz_mu, self.l_qz_logvar)
         l_log_pz = StandardNormalLogDensityLayer(self.l_qz)
 
-        l_x_in = ReshapeLayer(self.l_x_in, (-1, self.max_seq_length * self.n_x))
+        l_x_in = ReshapeLayer(self.l_x_in, (-1, self.seq_length * self.n_x))
         if self.x_dist == 'bernoulli':
-            l_px = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.max_seq_length * self.n_x))
+            l_px = ReshapeLayer(self.l_px, (-1, self.sym_samples, 1, self.seq_length * self.n_x))
             l_log_px = BernoulliLogDensityLayer(l_px, l_x_in)
         elif self.x_dist == 'multinomial':
-            l_px = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.max_seq_length * self.n_x))
+            l_px = ReshapeLayer(self.l_px, (-1, self.sym_samples, 1, self.seq_length * self.n_x))
             l_log_px = MultinomialLogDensityLayer(l_px, l_x_in)
         elif self.x_dist == 'gaussian':
-            l_px_mu = ReshapeLayer(DimshuffleLayer(self.l_px_mu, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.max_seq_length * self.n_x))
-            l_px_logvar = ReshapeLayer(DimshuffleLayer(self.l_px_logvar, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.max_seq_length * self.n_x))
+            l_px_mu = ReshapeLayer(self.l_px_mu, (-1, self.sym_samples, 1, self.seq_length * self.n_x))
+            l_px_logvar = ReshapeLayer(self.l_px_logvar, (-1, self.sym_samples, 1, self.seq_length * self.n_x))
             l_log_px = GaussianLogDensityLayer(l_x_in, l_px_mu, l_px_logvar)
         elif self.x_dist == 'linear':
-            l_log_px = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 1, 4, 2, 3)), (-1, self.max_seq_length, self.n_x))
+            l_log_px = self.l_px
 
         def lower_bound(log_pz, log_qz, log_px):
             lb = log_px + log_pz - log_qz
@@ -190,15 +197,15 @@ class RVAE(Model):
 
         # If the decoder output is linear we need the reconstruction error
         if self.x_dist == 'linear':
-            log_px = -aggregate(squared_error(log_px, self.sym_x), mode='mean')
+            log_px = -aggregate(squared_error(log_px.mean(axis=(1, 2)), self.sym_x), mode='mean')
 
         lb = lower_bound(log_pz, log_qz, log_px)
         lb = lb.mean(axis=(1, 2))  # Mean over the sampling dimensions
 
-        if self.batchnorm:
+        # if self.batchnorm:
             # TODO: implement the BN layer correctly.
-            inputs = {self.l_x_in: self.sym_x}
-            get_output(out_layers, inputs, weighting=None, batch_norm_update_averages=True, batch_norm_use_averages=False)
+            # inputs = {self.l_x_in: self.sym_x}
+            # get_output(out_layers, inputs, weighting=None, batch_norm_update_averages=True, batch_norm_use_averages=False)
 
         # Regularizing with weight priors p(theta|N(0,1)), collecting and clipping gradients
         weight_priors = 0.0
@@ -212,9 +219,9 @@ class RVAE(Model):
         elbo = lb.mean()
 
         # Add reconstruction cost
-        x_hat = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 1, 4, 2, 3)), (-1, self.max_seq_length, self.n_x))
-        x_hat = get_output(x_hat, inputs, batch_norm_update_averages=False, batch_norm_use_averages=False)
-        cost += aggregate(squared_error(x_hat, self.sym_x), mode='mean')
+        if not self.x_dist == 'linear':
+            x_hat = get_output(self.l_px, inputs).mean(axis=(1, 2))
+            cost += aggregate(squared_error(x_hat, self.sym_x), mode='mean')
 
         grads_collect = T.grad(cost, self.trainable_model_params)
         sym_beta1 = T.scalar('beta1')
@@ -258,9 +265,9 @@ class RVAE(Model):
         if validation_set is not None:
             givens = {self.sym_x: self.sh_valid_x}
             f_validate = theano.function(inputs=[self.sym_samples], outputs=[elbo], givens=givens)
-        # Default validation args. Note that these can be changed during or prior to training.
-        self.validate_args['inputs']['samples'] = 1
-        self.validate_args['outputs']['elbo validation'] = '%0.6f'
+            # Default validation args. Note that these can be changed during or prior to training.
+            self.validate_args['inputs']['samples'] = 1
+            self.validate_args['outputs']['elbo validation'] = '%0.6f'
 
         return f_train, f_test, f_validate, self.train_args, self.test_args, self.validate_args
 

@@ -40,7 +40,7 @@ class VAE(Model):
         # Input
         l_x_in = InputLayer((None, n_x))
 
-        # Recognition q(z|x)
+        # Inference q(z|x)
         l_z_x = l_x_in
         for hid in z_hidden:
             l_z_x = DenseLayer(l_z_x, hid, init.Normal(std=init_w), init.Normal(std=init_w), self.transf)
