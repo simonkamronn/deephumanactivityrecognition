@@ -131,9 +131,6 @@ class CVAE(Model):
         elif x_dist == 'linear':
             l_px = DenseLayer(l_px, n_x, nonlinearity=None)
 
-        # Reshape back to input shape
-        l_px = ReshapeLayer(l_px, (-1, self.sym_samples, seq_length, n_x))
-
         # Reshape all the model layers to have the same size
         self.l_x_in = l_x_in
 
@@ -141,9 +138,11 @@ class CVAE(Model):
         self.l_qz_mu = DimshuffleLayer(l_qz_mu, (0, 'x', 'x', 1))
         self.l_qz_logvar = DimshuffleLayer(l_qz_logvar, (0, 'x', 'x', 1))
 
-        self.l_px = ReshapeLayer(l_px, (-1, self.sym_samples, seq_length, n_x))
-        self.l_px_mu = ReshapeLayer(l_px_mu, (-1, self.sym_samples, seq_length, n_x)) if x_dist == "gaussian" else None
-        self.l_px_logvar = ReshapeLayer(l_px_logvar, (-1, self.sym_samples, seq_length, n_x)) if x_dist == "gaussian" else None
+        self.l_px = DimshuffleLayer(ReshapeLayer(l_px, (-1, seq_length, self.sym_samples, 1, n_x)), (0, 2, 3, 1, 4))
+        self.l_px_mu = DimshuffleLayer(ReshapeLayer(l_px_mu, (-1, seq_length, self.sym_samples, 1, n_x)), (0, 2, 3, 1, 4)) \
+            if x_dist == "gaussian" else None
+        self.l_px_logvar = DimshuffleLayer(ReshapeLayer(l_px_logvar, (-1, seq_length, self.sym_samples, 1, n_x)), (0, 2, 3, 1, 4)) \
+            if x_dist == "gaussian" else None
 
         # Predefined functions
         inputs = {self.l_x_in: self.sym_x}
@@ -155,7 +154,7 @@ class CVAE(Model):
         # self.f_px = theano.function([self.sym_z, self.sym_samples], outputs).mean(axis=1)
 
         inputs = {self.l_x_in: self.sym_x}
-        outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=1)
+        outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(1, 2))
         self.f_px = theano.function([self.sym_x, self.sym_samples], outputs)
 
         # Define model parameters
@@ -180,17 +179,17 @@ class CVAE(Model):
 
         l_x_in = ReshapeLayer(self.l_x_in, (-1, self.seq_length * self.n_x))
         if self.x_dist == 'bernoulli':
-            l_px = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.seq_length * self.n_x))
+            l_px = ReshapeLayer(self.l_px, (-1, self.sym_samples, 1, self.seq_length * self.n_x))
             l_log_px = BernoulliLogDensityLayer(l_px, l_x_in)
         elif self.x_dist == 'multinomial':
-            l_px = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.seq_length * self.n_x))
+            l_px = ReshapeLayer(self.l_px, (-1, self.sym_samples, 1, self.seq_length * self.n_x))
             l_log_px = MultinomialLogDensityLayer(l_px, l_x_in)
         elif self.x_dist == 'gaussian':
             l_px_mu = ReshapeLayer(self.l_px_mu, (-1, self.sym_samples, 1, self.seq_length * self.n_x))
             l_px_logvar = ReshapeLayer(self.l_px_logvar, (-1, self.sym_samples, 1, self.seq_length * self.n_x))
             l_log_px = GaussianLogDensityLayer(l_x_in, l_px_mu, l_px_logvar)
         elif self.x_dist == 'linear':
-            l_log_px = ReshapeLayer(self.l_px, (-1, self.seq_length, self.n_x))
+            l_log_px = self.l_px
 
         def lower_bound(log_pz, log_qz, log_px):
             lb = log_px + log_pz - log_qz
@@ -204,7 +203,7 @@ class CVAE(Model):
 
         # If the decoder output is linear we need the reconstruction error
         if self.x_dist == 'linear':
-            log_px = -aggregate(squared_error(log_px, self.sym_x), mode='mean')
+            log_px = -aggregate(squared_error(log_px.mean(axis=(1, 2)), self.sym_x), mode='mean')
 
         lb = lower_bound(log_pz, log_qz, log_px)
         lb = lb.mean(axis=(1, 2))  # Mean over the sampling dimensions
@@ -225,11 +224,10 @@ class CVAE(Model):
         cost = ((lb.mean()) * n + weight_priors) / -n
         elbo = lb.mean()
 
-        # Add reconstruction cost
-        if not self.x_dist == 'linear':
-            x_hat = ReshapeLayer(self.l_px, (-1, self.seq_length, self.n_x))
-            x_hat = get_output(x_hat, inputs, batch_norm_update_averages=False, batch_norm_use_averages=False)
-            cost += aggregate(squared_error(x_hat, self.sym_x), mode='mean')
+        # # Add reconstruction cost
+        # if not self.x_dist == 'linear':
+        #     x_hat = get_output(self.l_px, inputs)
+        #     cost += aggregate(squared_error(x_hat, self.sym_x), mode='mean')
 
         grads_collect = T.grad(cost, self.trainable_model_params)
         sym_beta1 = T.scalar('beta1')
