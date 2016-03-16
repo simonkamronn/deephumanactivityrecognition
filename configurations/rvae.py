@@ -21,8 +21,8 @@ def run_vrae_har():
         X = (X - np.min(X))/(np.max(X) - np.min(X))
         return X, np.ones((samples/length, 1))
 
-    X1, y1 = sinus_seq(5, 100000, 10)
-    X2, y2 = sinus_seq(4, 40000, 10)
+    X1, y1 = sinus_seq(20, 10000, 40)
+    X2, y2 = sinus_seq(8, 10000, 40)
 
     X = np.concatenate((X1, X2)).astype('float32')
     y = np.concatenate((y1*0, y2*1), axis=0).astype('int')[:, 0]
@@ -89,14 +89,14 @@ def run_vrae_har():
             act_idx = np.argmax(test_set[1], axis=1) == y_l
             test_act = test_set[0][act_idx]
 
-            # z = model.f_qz(test_act, 1)
-            # xhat = model.f_px(z, 1)
-            # mu = model.f_mu(z, 1)
-            # var = np.exp(model.f_var(z, 1))
+            z = model.f_qz(test_act, 1)
+            xhat = model.f_px(z, 1)
+            mu = model.f_mu(z, 1)
+            var = np.exp(model.f_var(z, 1))
 
-            xhat = model.f_px(test_act, 1)
-            mu = model.f_mu(test_act, 1)
-            var = np.exp(model.f_var(test_act, 1))
+            # xhat = model.f_px(test_act, 1)
+            # mu = model.f_mu(test_act, 1)
+            # var = np.exp(model.f_var(test_act, 1))
 
             axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red')
             axarr[idx, 0].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted')
