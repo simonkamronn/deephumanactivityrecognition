@@ -64,7 +64,7 @@ def run_conv_vae():
     # [num_filters, stride, pool]
     filters = [[64, 1, 2], [64, 1, 2], [64, 1, 2]]
     model = CVAE(n_x=int(n_x), n_z=64, px_hid=[], qz_hid=[64], filters=filters, seq_length=int(seq),
-                 nonlinearity=rectify, batchnorm=False, x_dist='gaussian')
+                 nonlinearity=rectify, batchnorm=False, x_dist='linear')
 
     # Get the training functions.
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)

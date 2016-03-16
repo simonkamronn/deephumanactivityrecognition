@@ -69,7 +69,7 @@ class CVAE(Model):
             return SampleLayer(mu, logvar, eq_samples=samples, iw_samples=1), mu, logvar
 
         def conv_layer(layer_in, filter, stride=(1, 1), pool=1, name='conv'):
-            l_conv = bn(Conv2DLayer(layer_in, num_filters=filter, filter_size=(3, 1), stride=stride, pad='full', name=name))
+            l_conv = Conv2DLayer(layer_in, num_filters=filter, filter_size=(3, 1), stride=stride, pad='full', name=name)
             if pool > 1:
                 l_conv = MaxPool2DLayer(l_conv, pool_size=(pool, 1))
                 pool_layers.append(l_conv)
@@ -99,7 +99,7 @@ class CVAE(Model):
         print("l_qz", l_qz.output_shape)
 
         # Inverse pooling
-        l_global_depool = bn(InverseLayer(l_qz, l_global_pool_enc))
+        l_global_depool = InverseLayer(l_qz, l_global_pool_enc)
         print("l_global_depool", l_global_depool.output_shape)
 
         # Reverse pool layer order
@@ -111,7 +111,7 @@ class CVAE(Model):
             filter, stride, pool = filter
             if pool > 1:
                 l_deconv = InverseLayer(l_deconv, pool_layers[idx])
-            l_deconv = bn(Conv2DLayer(l_deconv, num_filters=filter, filter_size=(3, 1), stride=(stride, 1), W=init.GlorotNormal('relu')))
+            l_deconv = Conv2DLayer(l_deconv, num_filters=filter, filter_size=(3, 1), stride=(stride, 1), W=init.GlorotNormal('relu'))
             print("l_deconv", l_deconv.output_shape)
 
         # The last l_conv layer should give us the input shape
@@ -127,12 +127,12 @@ class CVAE(Model):
         elif x_dist == 'multinomial':
             l_px = DenseLayer(l_px, n_x, init.GlorotNormal(), init.Normal(init_w), softmax)
         elif x_dist == 'gaussian':
-            l_px, l_px_mu, l_px_logvar = stochastic_layer(l_px, n_x, 1, px_nonlinearity)
+            l_px, l_px_mu, l_px_logvar = stochastic_layer(l_px, n_x, self.sym_samples, px_nonlinearity)
         elif x_dist == 'linear':
             l_px = DenseLayer(l_px, n_x, nonlinearity=None)
 
         # Reshape back to input shape
-        l_px = ReshapeLayer(l_px, (-1, seq_length, n_x))
+        l_px = ReshapeLayer(l_px, (-1, self.sym_samples, seq_length, n_x))
 
         # Reshape all the model layers to have the same size
         self.l_x_in = l_x_in
@@ -141,21 +141,21 @@ class CVAE(Model):
         self.l_qz_mu = DimshuffleLayer(l_qz_mu, (0, 'x', 'x', 1))
         self.l_qz_logvar = DimshuffleLayer(l_qz_logvar, (0, 'x', 'x', 1))
 
-        self.l_px = ReshapeLayer(l_px, (-1, seq_length, self.sym_samples, 1, n_x))
-        self.l_px_mu = ReshapeLayer(l_px_mu, (-1, seq_length, self.sym_samples, 1, n_x)) if x_dist == "gaussian" else None
-        self.l_px_logvar = ReshapeLayer(l_px_logvar, (-1, seq_length, self.sym_samples, 1, n_x)) if x_dist == "gaussian" else None
+        self.l_px = ReshapeLayer(l_px, (-1, self.sym_samples, seq_length, n_x))
+        self.l_px_mu = ReshapeLayer(l_px_mu, (-1, self.sym_samples, seq_length, n_x)) if x_dist == "gaussian" else None
+        self.l_px_logvar = ReshapeLayer(l_px_logvar, (-1, self.sym_samples, seq_length, n_x)) if x_dist == "gaussian" else None
 
         # Predefined functions
         inputs = {self.l_x_in: self.sym_x}
-        outputs = get_output(l_qz, inputs, deterministic=True)
+        outputs = get_output(self.l_qz, inputs, deterministic=True).mean(axis=(1, 2))
         self.f_qz = theano.function([self.sym_x, self.sym_samples], outputs)
 
         # inputs = {l_qz: self.sym_z}
-        # outputs = get_output(self.l_px, inputs, deterministic=True)
-        # self.f_px = theano.function([self.sym_z, self.sym_samples], outputs)
+        # outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=1)
+        # self.f_px = theano.function([self.sym_z, self.sym_samples], outputs).mean(axis=1)
 
         inputs = {self.l_x_in: self.sym_x}
-        outputs = get_output(self.l_px, inputs, deterministic=True)
+        outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=1)
         self.f_px = theano.function([self.sym_x, self.sym_samples], outputs)
 
         # Define model parameters
@@ -186,11 +186,11 @@ class CVAE(Model):
             l_px = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.seq_length * self.n_x))
             l_log_px = MultinomialLogDensityLayer(l_px, l_x_in)
         elif self.x_dist == 'gaussian':
-            l_px_mu = ReshapeLayer(DimshuffleLayer(self.l_px_mu, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.seq_length * self.n_x))
-            l_px_logvar = ReshapeLayer(DimshuffleLayer(self.l_px_logvar, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.seq_length * self.n_x))
+            l_px_mu = ReshapeLayer(self.l_px_mu, (-1, self.sym_samples, 1, self.seq_length * self.n_x))
+            l_px_logvar = ReshapeLayer(self.l_px_logvar, (-1, self.sym_samples, 1, self.seq_length * self.n_x))
             l_log_px = GaussianLogDensityLayer(l_x_in, l_px_mu, l_px_logvar)
         elif self.x_dist == 'linear':
-            l_log_px = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 1, 4, 2, 3)), (-1, self.seq_length, self.n_x))
+            l_log_px = ReshapeLayer(self.l_px, (-1, self.seq_length, self.n_x))
 
         def lower_bound(log_pz, log_qz, log_px):
             lb = log_px + log_pz - log_qz
@@ -227,7 +227,7 @@ class CVAE(Model):
 
         # Add reconstruction cost
         if not self.x_dist == 'linear':
-            x_hat = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 1, 4, 2, 3)), (-1, self.seq_length, self.n_x))
+            x_hat = ReshapeLayer(self.l_px, (-1, self.seq_length, self.n_x))
             x_hat = get_output(x_hat, inputs, batch_norm_update_averages=False, batch_norm_use_averages=False)
             cost += aggregate(squared_error(x_hat, self.sym_x), mode='mean')
 
