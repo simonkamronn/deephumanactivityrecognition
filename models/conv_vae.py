@@ -224,10 +224,10 @@ class CVAE(Model):
         cost = ((lb.mean()) * n + weight_priors) / -n
         elbo = lb.mean()
 
-        # # Add reconstruction cost
-        # if not self.x_dist == 'linear':
-        #     x_hat = get_output(self.l_px, inputs)
-        #     cost += aggregate(squared_error(x_hat, self.sym_x), mode='mean')
+        # Add reconstruction cost
+        if not self.x_dist == 'linear':
+            x_hat = get_output(self.l_px, inputs)
+            cost += aggregate(squared_error(x_hat, self.sym_x), mode='mean')
 
         grads_collect = T.grad(cost, self.trainable_model_params)
         sym_beta1 = T.scalar('beta1')
