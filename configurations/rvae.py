@@ -1,5 +1,3 @@
-import theano.sandbox.cuda  # TODO delete
-theano.sandbox.cuda.use('gpu3')  # TODO delete
 import theano
 from training.train import TrainModel
 from lasagne_extensions.nonlinearities import rectify
@@ -82,8 +80,6 @@ def run_vrae_har():
     train_args['inputs']['beta2'] = 0.999
     train_args['inputs']['samples'] = 1
     train_args['inputs']['warmup'] = 1.1
-    test_args['inputs']['samples'] = 1
-    validate_args['inputs']['samples'] = 1
 
     def custom_evaluation(model, path):
 
