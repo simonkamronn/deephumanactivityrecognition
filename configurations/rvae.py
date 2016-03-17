@@ -42,6 +42,8 @@ def run_vrae_har():
     X = X[limited_labels]
     users = users[limited_labels]
 
+    X -= X.mean(axis=0)
+
     # Compress labels
     for idx, label in enumerate(np.unique(y)):
         if not np.equal(idx, label):
@@ -68,14 +70,14 @@ def run_vrae_har():
     bs = n / n_batches  # The batchsize.
 
     # Initialize the auxiliary deep generative model.
-    model = RVAE(n_x=n_x, n_z=64, qz_hid=[64], px_hid=[64], enc_rnn=64, dec_rnn=64, seq_length=seq,
+    model = RVAE(n_x=n_x, n_z=128, qz_hid=[128], px_hid=[128], enc_rnn=64, dec_rnn=64, seq_length=seq,
                  nonlinearity=rectify, batchnorm=False, x_dist='gaussian')
 
     # Get the training functions.
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)
     # Update the default function arguments.
     train_args['inputs']['batchsize'] = 100
-    train_args['inputs']['learningrate'] = 3e-3
+    train_args['inputs']['learningrate'] = 1e-3
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
     train_args['inputs']['samples'] = 1
@@ -119,7 +121,7 @@ def run_vrae_har():
                       # Any symbolic model variable can be annealed during
                       # training with a tuple of (var_name, every, scale constant, minimum value).
                       anneal=[("learningrate", 100, 0.75, 3e-5),
-                              ("warmup", 1, 0.99, 0.1)])
+                              ("warmup", 5, 0.99, 0.1)])
 
 if __name__ == "__main__":
     run_vrae_har()
