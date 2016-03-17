@@ -77,6 +77,7 @@ def run_cvae():
     train_args['inputs']['learningrate'] = 1e-3
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
+    train_args['inputs']['warmup'] = 1.1
 
     def custom_evaluation(model, path):
         plt.clf()
@@ -111,7 +112,8 @@ def run_cvae():
                       f_validate, validate_args,
                       n_train_batches=n_batches,
                       n_epochs=10000,
-                      anneal=[("learningrate", 100, 0.75, 3e-5)])
+                      anneal=[("learningrate", 100, 0.75, 3e-5),
+                              ("warmup", 5, 0.99, 0.1)])
 
 if __name__ == "__main__":
     run_cvae()

@@ -193,9 +193,9 @@ class CVAE(Model):
         elif self.x_dist == 'linear':
             l_log_px = self.l_px
 
+        self.sym_warmup = T.fscalar('warmup')
         def lower_bound(log_pz, log_qz, log_px):
-            lb = log_px + log_pz - log_qz
-            return lb
+            return log_px + (log_pz - log_qz)*(1. - self.sym_warmup - 0.1)
 
         # Lower bound
         out_layers = [l_log_pz, l_log_qz, l_log_px]
@@ -241,7 +241,7 @@ class CVAE(Model):
             x_batch = self._srng.binomial(size=x_batch.shape, n=1, p=x_batch, dtype=theano.config.floatX)
 
         givens = {self.sym_x: x_batch}
-        inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2, self.sym_samples]
+        inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2, self.sym_samples, self.sym_warmup]
         outputs = [log_px.mean(), log_pz.mean(), log_qz.mean(), elbo]
         f_train = theano.function(inputs=inputs, outputs=outputs, givens=givens, updates=updates)
 
@@ -251,14 +251,16 @@ class CVAE(Model):
         self.train_args['inputs']['beta1'] = 0.9
         self.train_args['inputs']['beta2'] = 0.999
         self.train_args['inputs']['samples'] = 1
+        self.train_args['inputs']['warmup'] = 0
         self.train_args['outputs']['log p(x)'] = '%0.6f'
         self.train_args['outputs']['log p(z)'] = '%0.6f'
         self.train_args['outputs']['log q(z)'] = '%0.6f'
         self.train_args['outputs']['elbo train'] = '%0.6f'
+        self.train_args['outputs']['warmup'] = '%0.3f'
 
         # Validation and test function
         givens = {self.sym_x: self.sh_test_x}
-        f_test = theano.function(inputs=[self.sym_samples], outputs=[elbo], givens=givens)
+        f_test = theano.function(inputs=[self.sym_samples, self.sym_warmup], outputs=[elbo], givens=givens)
 
         # Test args.  Note that these can be changed during or prior to training.
         self.test_args['inputs']['samples'] = 1
