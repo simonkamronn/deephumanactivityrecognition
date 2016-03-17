@@ -223,13 +223,8 @@ class CVAE(Model):
             weight_priors += log_normal(p, 0, 1).sum()
 
         # Collect the lower bound and scale it with the weight priors.
-        cost = ((lb.mean()) * n + weight_priors) / -n
         elbo = lb.mean()
-
-        # # Add reconstruction cost
-        # if not self.x_dist == 'linear':
-        #     x_hat = get_output(self.l_px, inputs).mean(axis=(1, 2))
-        #     cost += aggregate(squared_error(x_hat, self.sym_x), mode='mean')
+        cost = (elbo * n + weight_priors) / -n
 
         grads_collect = T.grad(cost, self.trainable_model_params)
         sym_beta1 = T.scalar('beta1')
