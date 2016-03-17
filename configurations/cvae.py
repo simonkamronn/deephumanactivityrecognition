@@ -74,10 +74,10 @@ def run_cvae():
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)
     # Update the default function arguments.
     train_args['inputs']['batchsize'] = 100
-    train_args['inputs']['learningrate'] = 1e-3
+    train_args['inputs']['learningrate'] = 1e-4
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
-    train_args['inputs']['warmup'] = 1.1
+    train_args['inputs']['warmup'] = .5
 
     def custom_evaluation(model, path):
         plt.clf()

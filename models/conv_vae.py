@@ -242,7 +242,7 @@ class CVAE(Model):
 
         givens = {self.sym_x: x_batch}
         inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2, self.sym_samples, self.sym_warmup]
-        outputs = [log_px.mean(), log_pz.mean(), log_qz.mean(), elbo]
+        outputs = [log_px.mean(), log_pz.mean(), log_qz.mean(), elbo, self.sym_warmup]
         f_train = theano.function(inputs=inputs, outputs=outputs, givens=givens, updates=updates)
 
         # Default training args. Note that these can be changed during or prior to training.
