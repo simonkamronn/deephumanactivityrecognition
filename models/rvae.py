@@ -63,7 +63,7 @@ class RVAE(Model):
         def stochastic_layer(layer_in, n, samples, nonlin=None):
             mu = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
             logvar = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
-            logvar = ConstrainLayer(logvar, scale=1, max=0)
+            logvar = ConstrainLayer(logvar, scale=1, max=T.log(0.01))
             return SampleLayer(mu, logvar, eq_samples=samples, iw_samples=1), mu, logvar
 
         def lstm_layer(input, nunits, return_final, backwards=False, name='LSTM'):

@@ -99,8 +99,8 @@ def run_vrae_har():
 
             axarr[idx, 1].plot(mu[:2].reshape(-1, dim_features))
             axarr[idx, 1].plot(var[:2].reshape(-1, dim_features))
+            plt.legend()
 
-        plt.legend(loc=3)
         f.set_size_inches(12, 10)
         f.savefig(path, dpi=100, format='png')
         plt.close(f)
