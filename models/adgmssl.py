@@ -2,7 +2,7 @@ import theano
 import theano.tensor as T
 from lasagne import init
 from base import Model
-from lasagne_extensions.layers import (SampleLayer, GaussianMarginalLogDensityLayer, MultinomialLogDensityLayer,
+from lasagne_extensions.layers import (SampleLayer, MultinomialLogDensityLayer,
                                        GaussianLogDensityLayer, StandardNormalLogDensityLayer, BernoulliLogDensityLayer,
                                        InputLayer, DenseLayer, DimshuffleLayer, ElemwiseSumLayer, ReshapeLayer,
                                        NonlinearityLayer, NormalizeLayer, ScaleAndShiftLayer, get_all_params, get_output)
