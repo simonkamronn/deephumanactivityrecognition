@@ -94,11 +94,11 @@ def run_vrae_har():
             mu = model.f_mu(z, 1)
             var = np.exp(model.f_var(z, 1))
 
-            axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red')
-            axarr[idx, 0].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted')
+            axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red', label="x")
+            axarr[idx, 0].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted', label="xhat")
 
-            axarr[idx, 1].plot(mu[:2].reshape(-1, dim_features))
-            axarr[idx, 1].plot(var[:2].reshape(-1, dim_features))
+            axarr[idx, 1].plot(mu[:2].reshape(-1, dim_features), label="mu")
+            axarr[idx, 1].plot(var[:2].reshape(-1, dim_features), laebl="var")
             plt.legend()
 
         f.set_size_inches(12, 10)
