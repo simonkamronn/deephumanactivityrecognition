@@ -62,6 +62,7 @@ class RVAE(Model):
 
         def stochastic_layer(layer_in, n, samples, nonlin=None):
             mu = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
+            mu = ConstrainLayer(mu, scale=(self.sym_warmup * 10 + 0.9))
             logvar = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
             logvar = ConstrainLayer(logvar, scale=1, max=T.log(0.001))
             return SampleLayer(mu, logvar, eq_samples=samples, iw_samples=1), mu, logvar
@@ -157,15 +158,6 @@ class RVAE(Model):
 
         outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(1, 2))
         self.f_var = theano.function([self.sym_z, self.sym_samples], outputs)
-
-        # outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(1, 2))
-        # self.f_px = theano.function([self.sym_x, self.sym_samples], outputs)
-        #
-        # outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(1, 2))
-        # self.f_mu = theano.function([self.sym_x, self.sym_samples], outputs)
-        #
-        # outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(1, 2))
-        # self.f_var = theano.function([self.sym_x, self.sym_samples], outputs)
 
         # Define model parameters
         self.model_params = get_all_params([self.l_px])

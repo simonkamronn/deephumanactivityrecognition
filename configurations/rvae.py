@@ -98,9 +98,9 @@ def run_vrae_har():
             axarr[idx, 0].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted', label="xhat")
 
             axarr[idx, 1].plot(mu[:2].reshape(-1, dim_features), label="mu")
-            axarr[idx, 1].plot(var[:2].reshape(-1, dim_features), laebl="var")
-            plt.legend()
+            axarr[idx, 1].plot(var[:2].reshape(-1, dim_features), label="var")
 
+        plt.legend(loc=1)
         f.set_size_inches(12, 10)
         f.savefig(path, dpi=100, format='png')
         plt.close(f)
