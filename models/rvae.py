@@ -6,7 +6,7 @@ from lasagne_extensions.layers import (SampleLayer, MultinomialLogDensityLayer,
                                        GaussianLogDensityLayer, StandardNormalLogDensityLayer, BernoulliLogDensityLayer,
                                        InputLayer, DenseLayer, DimshuffleLayer, ElemwiseSumLayer, ReshapeLayer,
                                        NonlinearityLayer, BatchNormLayer, get_all_params, get_output)
-from lasagne_extensions.layers import (RecurrentLayer, LSTMLayer, ConcatLayer, RepeatLayer, Gate)
+from lasagne_extensions.layers import (RecurrentLayer, LSTMLayer, ConcatLayer, RepeatLayer, Gate, ConstrainLayer)
 from lasagne_extensions.objectives import categorical_crossentropy, categorical_accuracy, aggregate, squared_error
 from lasagne_extensions.nonlinearities import rectify, softplus, sigmoid, softmax
 from lasagne_extensions.updates import total_norm_constraint
@@ -63,6 +63,7 @@ class RVAE(Model):
         def stochastic_layer(layer_in, n, samples, nonlin=None):
             mu = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
             logvar = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
+            logvar = ConstrainLayer(logvar, scale=1, max_value=T.log(1))
             return SampleLayer(mu, logvar, eq_samples=samples, iw_samples=1), mu, logvar
 
         def lstm_layer(input, nunits, return_final, backwards=False, name='LSTM'):
