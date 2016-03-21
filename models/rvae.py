@@ -245,7 +245,7 @@ class RVAE(Model):
         self.train_args['inputs']['beta1'] = 0.9
         self.train_args['inputs']['beta2'] = 0.999
         self.train_args['inputs']['samples'] = 1
-        self.train_args['inputs']['warmup'] = 0
+        self.train_args['inputs']['warmup'] = 0.1
         self.train_args['outputs']['log p(x)'] = '%0.6f'
         self.train_args['outputs']['log p(z)'] = '%0.6f'
         self.train_args['outputs']['log q(z)'] = '%0.6f'
@@ -258,7 +258,7 @@ class RVAE(Model):
 
         # Test args.  Note that these can be changed during or prior to training.
         self.test_args['inputs']['samples'] = 1
-        self.test_args['inputs']['warmup'] = 0
+        self.test_args['inputs']['warmup'] = 0.1
         self.test_args['outputs']['elbo test'] = '%0.6f'
 
         f_validate = None
