@@ -100,8 +100,13 @@ class RVAE(Model):
             l_qz = dense_layer(l_qz, hid)
         l_qz, l_qz_mu, l_qz_logvar = stochastic_layer(l_qz, n_z, self.sym_samples, nonlin=None)
 
+        # Skip connection to encoder
+        l_skip_enc_repeat = RepeatLayer(l_enc, n=seq_length)
+
         # Generative p(x|z)
         l_qz_repeat = RepeatLayer(l_qz, n=seq_length)
+        l_qz_repeat = ConcatLayer([l_qz_repeat, l_skip_enc_repeat], axis=-1)
+
         l_dec_forward = lstm_layer(l_qz_repeat, dec_rnn, return_final=False, backwards=False, name='dec_forward')
         l_dec_backward = lstm_layer(l_qz_repeat, dec_rnn, return_final=False, backwards=True, name='dec_backward')
         l_dec_concat = ConcatLayer([l_dec_forward, l_dec_backward], axis=-1)
