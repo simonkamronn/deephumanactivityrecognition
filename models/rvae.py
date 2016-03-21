@@ -62,10 +62,9 @@ class RVAE(Model):
             return NonlinearityLayer(dense, self.transf)
 
         def stochastic_layer(layer_in, n, samples, nonlin=None):
-            mu = DenseLayer(layer_in, n, W=init.Normal(init_w, mean=1.), b=init.Normal(init_w), nonlinearity=nonlin)
-
-            logvar = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
-            logvar = ConstrainLayer(logvar, scale=1, max=T.log(-0.999 * self.sym_warmup + 1.0999))
+            mu = DenseLayer(layer_in, n, W=init.Normal(init_w, mean=.0), b=init.Normal(init_w), nonlinearity=nonlin)
+            logvar = DenseLayer(layer_in, n, W=init.Normal(init_w, mean=.0), b=init.Normal(init_w), nonlinearity=nonlin)
+            # logvar = ConstrainLayer(logvar, scale=1, max=T.log(-0.999 * self.sym_warmup + 1.0999))
             return SampleLayer(mu, logvar, eq_samples=samples, iw_samples=1), mu, logvar
 
         def lstm_layer(input, nunits, return_final, backwards=False, name='LSTM'):
@@ -98,13 +97,17 @@ class RVAE(Model):
         l_qz = l_enc
         for hid in qz_hid:
             l_qz = dense_layer(l_qz, hid)
-        l_qz, l_qz_mu, l_qz_logvar = stochastic_layer(l_qz, n_z, self.sym_samples, nonlin=None)
+
+        # Reparameterisation and sample
+        l_qz_mu = DenseLayer(l_qz, n_z, W=init.Normal(init_w, mean=1.0), b=init.Normal(init_w), nonlinearity=None)
+        l_qz_logvar = DenseLayer(l_qz, n_z, init.Normal(init_w), init.Normal(init_w), nonlinearity=None)
+        l_qz = SampleLayer(l_qz_mu, l_qz_logvar, eq_samples=self.sym_samples, iw_samples=1)
 
         # Generative p(x|z)
         l_qz_repeat = RepeatLayer(l_qz, n=seq_length)
 
         # Skip connection to encoder until warmup threshold is reached
-        if T.ge(self.sym_warmup, 0.7):
+        if T.ge(self.sym_warmup, 0.4):
             l_skip_enc_repeat = RepeatLayer(l_enc, n=seq_length)
             l_qz_repeat = ConcatLayer([l_qz_repeat, l_skip_enc_repeat], axis=-1)
 
@@ -196,7 +199,7 @@ class RVAE(Model):
             l_log_px = self.l_px
 
         def lower_bound(log_pz, log_qz, log_px, warmup=self.sym_warmup):
-            return log_px*(warmup - 0.1) + (log_pz - log_qz)*(1.1 - warmup)
+            return log_px + (log_pz - log_qz)*(1.1 - warmup)
 
         # Lower bound
         out_layers = [l_log_pz, l_log_qz, l_log_px]
@@ -226,6 +229,10 @@ class RVAE(Model):
         # Collect the lower bound and scale it with the weight priors.
         elbo = lb.mean()
         cost = (elbo * n + weight_priors) / -n
+
+        # Add reconstruction cost
+        xhat = get_output(self.l_px, inputs).mean(axis=(1, 2))
+        cost += aggregate(squared_error(xhat, self.sym_x), mode='mean')
 
         grads_collect = T.grad(cost, self.trainable_model_params)
         sym_beta1 = T.scalar('beta1')

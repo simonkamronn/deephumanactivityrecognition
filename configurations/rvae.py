@@ -1,6 +1,6 @@
 import theano
 from training.train import TrainModel
-from lasagne_extensions.nonlinearities import rectify
+from lasagne_extensions.nonlinearities import rectify, softplus
 from data_loaders import mnist, har
 from data_loaders.data_helper import one_hot
 from models.rvae import RVAE
@@ -12,50 +12,50 @@ from sklearn.cross_validation import train_test_split
 def run_vrae_har():
     seed = np.random.randint(1, 2147462579)
 
-    def sinus_seq(period, samples, length):
-        X = np.linspace(-np.pi*(samples/period), np.pi*(samples/period), samples)
-        X = np.reshape(np.sin(X), (-1, length, 1))
-        X += np.random.randn(*X.shape)*0.1
-        # X = (X - np.min(X))/(np.max(X) - np.min(X))
-        return X, np.ones((samples/length, 1))
-
-    X1, y1 = sinus_seq(20, 100000, 40)
-    X2, y2 = sinus_seq(12, 100000, 40)
-    X3, y3 = sinus_seq(8, 100000, 40)
-
-    X = np.concatenate((X1, X2, X3)).astype('float32')
-    y = np.concatenate((y1*0, y2*1, y3*2), axis=0).astype('int')[:, 0]
-    y_unique = np.unique(list(y))
-
-    y = one_hot(y, len(y_unique))
-
-    dim_samples, dim_sequence, dim_features = X.shape
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
-
-    # ##
-    # # HAR data
-    # X, y, users, stats = har.load()
-    # limited_labels = y < 5
-    # y = y[limited_labels]
-    # X = X[limited_labels]
-    # users = users[limited_labels]
+    # def sinus_seq(period, samples, length):
+    #     X = np.linspace(-np.pi*(samples/period), np.pi*(samples/period), samples)
+    #     X = np.reshape(np.sin(X), (-1, length, 1))
+    #     X += np.random.randn(*X.shape)*0.1
+    #     # X = (X - np.min(X))/(np.max(X) - np.min(X))
+    #     return X, np.ones((samples/length, 1))
     #
-    # X -= X.mean(axis=0)
+    # X1, y1 = sinus_seq(20, 100000, 40)
+    # X2, y2 = sinus_seq(12, 100000, 40)
+    # X3, y3 = sinus_seq(8, 100000, 40)
     #
-    # # Compress labels
-    # for idx, label in enumerate(np.unique(y)):
-    #     if not np.equal(idx, label):
-    #         y[y == label] = idx
+    # X = np.concatenate((X1, X2, X3)).astype('float32')
+    # y = np.concatenate((y1*0, y2*1, y3*2), axis=0).astype('int')[:, 0]
+    # y_unique = np.unique(list(y))
     #
-    # y_unique = np.unique(y)
     # y = one_hot(y, len(y_unique))
     #
     # dim_samples, dim_sequence, dim_features = X.shape
-    # num_classes = len(y_unique)
-    #
-    # # Split into train and test stratified by users
-    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=users)
-    # ##
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
+
+    ##
+    # HAR data
+    X, y, users, stats = har.load()
+    limited_labels = y < 5
+    y = y[limited_labels]
+    X = X[limited_labels]
+    users = users[limited_labels]
+
+    X -= X.mean(axis=0)
+
+    # Compress labels
+    for idx, label in enumerate(np.unique(y)):
+        if not np.equal(idx, label):
+            y[y == label] = idx
+
+    y_unique = np.unique(y)
+    y = one_hot(y, len(y_unique))
+
+    dim_samples, dim_sequence, dim_features = X.shape
+    num_classes = len(y_unique)
+
+    # Split into train and test stratified by users
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=users)
+    ##
 
     # Combine in sets
     train_set = (X_train, y_train)
@@ -69,7 +69,7 @@ def run_vrae_har():
 
     # Initialize the auxiliary deep generative model.
     model = RVAE(n_x=n_x, n_z=64, qz_hid=[64], px_hid=[64], enc_rnn=64, dec_rnn=64, seq_length=seq,
-                 nonlinearity=rectify, batchnorm=False, x_dist='linear')
+                 nonlinearity=rectify, batchnorm=False, x_dist='linear', px_nonlinearity=None)
 
     # Get the training functions.
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)
@@ -83,20 +83,20 @@ def run_vrae_har():
 
     def custom_evaluation(model, path):
         plt.clf()
-        f, axarr = plt.subplots(nrows=len(y_unique), ncols=2)
+        f, axarr = plt.subplots(nrows=len(y_unique), ncols=1)
         for idx, y_l in enumerate(y_unique):
             act_idx = np.argmax(test_set[1], axis=1) == y_l
             test_act = test_set[0][act_idx]
 
-            z = model.f_qz(test_act, 1, 1.1)
-            xhat = model.f_px(test_act, z, 1, 1.1)
+            z = model.f_qz(test_act, 1, 0.1)
+            xhat = model.f_px(test_act, z, 1, 0.1)
 
-            axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red', label="x")
-            axarr[idx, 0].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted', label="xhat")
+            axarr[idx].plot(test_act[:2].reshape(-1, dim_features), color='red', label="x")
+            axarr[idx].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted', label="xhat")
 
             if model.x_dist == "gaussian":
                 mu = model.f_mu(test_act, z, 1)
-                var = np.exp(model.f_var(test_act, z, 1, 1.1))
+                var = np.exp(model.f_var(test_act, z, 1, 0.1))
 
                 axarr[idx, 1].plot(mu[:2].reshape(-1, dim_features), label="mu")
                 axarr[idx, 1].plot(var[:2].reshape(-1, dim_features), label="var")
@@ -118,7 +118,7 @@ def run_vrae_har():
                       # Any symbolic model variable can be annealed during
                       # training with a tuple of (var_name, every, scale constant, minimum value).
                       anneal=[("learningrate", 100, 0.75, 3e-5),
-                              ("warmup", 1, 0.99, 0.6)])
+                              ("warmup", 1, 0.99, 0.1)])
 
 if __name__ == "__main__":
     run_vrae_har()
