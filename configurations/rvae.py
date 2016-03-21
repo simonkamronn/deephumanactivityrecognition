@@ -79,7 +79,7 @@ def run_vrae_har():
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
     train_args['inputs']['samples'] = 1
-    train_args['inputs']['warmup'] = (1 + .1)
+    train_args['inputs']['warmup'] = (1 + .1)  # 0.5 means equal px and (pz-qz)
 
     def custom_evaluation(model, path):
         plt.clf()
@@ -118,7 +118,7 @@ def run_vrae_har():
                       # Any symbolic model variable can be annealed during
                       # training with a tuple of (var_name, every, scale constant, minimum value).
                       anneal=[("learningrate", 100, 0.75, 3e-5),
-                              ("warmup", 1, 1, 0.1)])
+                              ("warmup", 1, 0.99, 0.6)])
 
 if __name__ == "__main__":
     run_vrae_har()

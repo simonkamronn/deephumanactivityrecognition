@@ -103,9 +103,10 @@ class RVAE(Model):
         # Generative p(x|z)
         l_qz_repeat = RepeatLayer(l_qz, n=seq_length)
 
-        # Skip connection to encoder
-        l_qz_repeat = RepeatLayer(l_enc, n=seq_length)
-        # l_qz_repeat = ConcatLayer([l_qz_repeat, l_skip_enc_repeat], axis=-1)
+        # Skip connection to encoder until warmup threshold is reached
+        if T.ge(self.sym_warmup, 0.7):
+            l_skip_enc_repeat = RepeatLayer(l_enc, n=seq_length)
+            l_qz_repeat = ConcatLayer([l_qz_repeat, l_skip_enc_repeat], axis=-1)
 
         l_dec_forward = lstm_layer(l_qz_repeat, dec_rnn, return_final=False, backwards=False, name='dec_forward')
         l_dec_backward = lstm_layer(l_qz_repeat, dec_rnn, return_final=False, backwards=True, name='dec_backward')
@@ -194,8 +195,8 @@ class RVAE(Model):
         elif self.x_dist == 'linear':
             l_log_px = self.l_px
 
-        def lower_bound(log_pz, log_qz, log_px):
-            return log_px*(self.sym_warmup - 0.1) + (log_pz - log_qz)*(1.1 - self.sym_warmup)
+        def lower_bound(log_pz, log_qz, log_px, warmup=self.sym_warmup):
+            return log_px*(warmup - 0.1) + (log_pz - log_qz)*(1.1 - warmup)
 
         # Lower bound
         out_layers = [l_log_pz, l_log_qz, l_log_px]
