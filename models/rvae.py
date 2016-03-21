@@ -65,7 +65,7 @@ class RVAE(Model):
             mu = DenseLayer(layer_in, n, W=init.Normal(init_w, mean=1.), b=init.Normal(init_w), nonlinearity=nonlin)
 
             logvar = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
-            logvar = ConstrainLayer(logvar, scale=1, max=T.log(-0.999 * self.sym_warmup + 1.0999 + .6))
+            logvar = ConstrainLayer(logvar, scale=1, max=T.log(-0.999 * self.sym_warmup + 1.0999))
             return SampleLayer(mu, logvar, eq_samples=samples, iw_samples=1), mu, logvar
 
         def lstm_layer(input, nunits, return_final, backwards=False, name='LSTM'):
@@ -104,8 +104,8 @@ class RVAE(Model):
         l_qz_repeat = RepeatLayer(l_qz, n=seq_length)
 
         # Skip connection to encoder
-        l_skip_enc_repeat = RepeatLayer(l_enc, n=seq_length)
-        l_qz_repeat = ConcatLayer([l_qz_repeat, l_skip_enc_repeat], axis=-1)
+        l_qz_repeat = RepeatLayer(l_enc, n=seq_length)
+        # l_qz_repeat = ConcatLayer([l_qz_repeat, l_skip_enc_repeat], axis=-1)
 
         l_dec_forward = lstm_layer(l_qz_repeat, dec_rnn, return_final=False, backwards=False, name='dec_forward')
         l_dec_backward = lstm_layer(l_qz_repeat, dec_rnn, return_final=False, backwards=True, name='dec_backward')
@@ -153,11 +153,12 @@ class RVAE(Model):
         outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(1, 2))
         self.f_px = theano.function([self.sym_x, self.sym_z, self.sym_samples, self.sym_warmup], outputs, on_unused_input='warn')
 
-        outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(1, 2))
-        self.f_mu = theano.function([self.sym_x, self.sym_z, self.sym_samples], outputs, on_unused_input='warn')
+        if x_dist == "gaussian":
+            outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(1, 2))
+            self.f_mu = theano.function([self.sym_x, self.sym_z, self.sym_samples], outputs, on_unused_input='ignore')
 
-        outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(1, 2))
-        self.f_var = theano.function([self.sym_x, self.sym_z, self.sym_samples, self.sym_warmup], outputs, on_unused_input='warn')
+            outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(1, 2))
+            self.f_var = theano.function([self.sym_x, self.sym_z, self.sym_samples, self.sym_warmup], outputs, on_unused_input='ignore')
 
         # Define model parameters
         self.model_params = get_all_params([self.l_px])
@@ -194,7 +195,7 @@ class RVAE(Model):
             l_log_px = self.l_px
 
         def lower_bound(log_pz, log_qz, log_px):
-            return log_px*(self.sym_warmup + 0.1) + (log_pz - log_qz)*(1.1 - self.sym_warmup)
+            return log_px*(self.sym_warmup - 0.1) + (log_pz - log_qz)*(1.1 - self.sym_warmup)
 
         # Lower bound
         out_layers = [l_log_pz, l_log_qz, l_log_px]

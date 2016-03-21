@@ -69,20 +69,19 @@ def run_vrae_har():
 
     # Initialize the auxiliary deep generative model.
     model = RVAE(n_x=n_x, n_z=64, qz_hid=[64], px_hid=[64], enc_rnn=64, dec_rnn=64, seq_length=seq,
-                 nonlinearity=rectify, batchnorm=False, x_dist='gaussian')
+                 nonlinearity=rectify, batchnorm=False, x_dist='linear')
 
     # Get the training functions.
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)
     # Update the default function arguments.
     train_args['inputs']['batchsize'] = 100
-    train_args['inputs']['learningrate'] = 1e-3
+    train_args['inputs']['learningrate'] = 1e-2
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
     train_args['inputs']['samples'] = 1
-    train_args['inputs']['warmup'] = .6
+    train_args['inputs']['warmup'] = (1 + .1)
 
     def custom_evaluation(model, path):
-
         plt.clf()
         f, axarr = plt.subplots(nrows=len(y_unique), ncols=2)
         for idx, y_l in enumerate(y_unique):
@@ -91,14 +90,16 @@ def run_vrae_har():
 
             z = model.f_qz(test_act, 1, 1.1)
             xhat = model.f_px(test_act, z, 1, 1.1)
-            mu = model.f_mu(test_act, z, 1)
-            var = np.exp(model.f_var(test_act, z, 1, 1.1))
 
             axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red', label="x")
             axarr[idx, 0].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted', label="xhat")
 
-            axarr[idx, 1].plot(mu[:2].reshape(-1, dim_features), label="mu")
-            axarr[idx, 1].plot(var[:2].reshape(-1, dim_features), label="var")
+            if model.x_dist == "gaussian":
+                mu = model.f_mu(test_act, z, 1)
+                var = np.exp(model.f_var(test_act, z, 1, 1.1))
+
+                axarr[idx, 1].plot(mu[:2].reshape(-1, dim_features), label="mu")
+                axarr[idx, 1].plot(var[:2].reshape(-1, dim_features), label="var")
 
         plt.legend(loc=1)
         f.set_size_inches(12, 10)
@@ -117,7 +118,7 @@ def run_vrae_har():
                       # Any symbolic model variable can be annealed during
                       # training with a tuple of (var_name, every, scale constant, minimum value).
                       anneal=[("learningrate", 100, 0.75, 3e-5),
-                              ("warmup", 1, 0.99, 0.1)])
+                              ("warmup", 1, 1, 0.1)])
 
 if __name__ == "__main__":
     run_vrae_har()
