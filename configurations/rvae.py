@@ -90,9 +90,9 @@ def run_vrae_har():
             test_act = test_set[0][act_idx]
 
             z = model.f_qz(test_act, 1, 1.1)
-            xhat = model.f_px(z, 1, 1.1)
-            mu = model.f_mu(z, 1)
-            var = np.exp(model.f_var(z, 1, 1.1))
+            xhat = model.f_px(test_act, z, 1, 1.1)
+            mu = model.f_mu(test_act, z, 1)
+            var = np.exp(model.f_var(test_act, z, 1, 1.1))
 
             axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red', label="x")
             axarr[idx, 0].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted', label="xhat")
