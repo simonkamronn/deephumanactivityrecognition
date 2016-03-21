@@ -52,6 +52,7 @@ class RVAE(Model):
         self.sym_x = T.tensor3('x')  # inputs
         self.sym_z = T.matrix('z')
         self.sym_samples = T.iscalar('samples')  # MC samples
+        self.sym_warmup = T.fscalar('warmup')
 
         # Assist methods for collecting the layers
         def dense_layer(layer_in, n, dist_w=init.GlorotNormal, dist_b=init.Normal):
@@ -62,9 +63,9 @@ class RVAE(Model):
 
         def stochastic_layer(layer_in, n, samples, nonlin=None):
             mu = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
-            mu = ConstrainLayer(mu, scale=(self.sym_warmup * 10 + 0.9))
+
             logvar = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
-            logvar = ConstrainLayer(logvar, scale=1, max=T.log(0.001))
+            # logvar = ConstrainLayer(logvar, scale=1, max=T.log(-0.999 * self.sym_warmup + 1.0999 + 1))
             return SampleLayer(mu, logvar, eq_samples=samples, iw_samples=1), mu, logvar
 
         def lstm_layer(input, nunits, return_final, backwards=False, name='LSTM'):
@@ -81,12 +82,6 @@ class RVAE(Model):
                              outgate=outgate,
                              name=name,
                              only_return_final=return_final)
-
-            rec = RecurrentLayer(input, num_units=nunits,
-                                 W_in_to_hid=init.GlorotNormal('relu'),
-                                 W_hid_to_hid=init.GlorotNormal('relu'), backwards=backwards,
-                                 nonlinearity=rectify, only_return_final=return_final, name=name)
-
             return lstm
 
         # RNN encoder implementation
@@ -103,7 +98,7 @@ class RVAE(Model):
         l_qz = l_enc
         for hid in qz_hid:
             l_qz = dense_layer(l_qz, hid)
-        l_qz, l_qz_mu, l_qz_logvar = stochastic_layer(l_qz, n_z, self.sym_samples, None)
+        l_qz, l_qz_mu, l_qz_logvar = stochastic_layer(l_qz, n_z, self.sym_samples, nonlin=None)
 
         # Generative p(x|z)
         l_qz_repeat = RepeatLayer(l_qz, n=seq_length)
@@ -127,7 +122,7 @@ class RVAE(Model):
         elif x_dist == 'multinomial':
             l_px = DenseLayer(l_px, n_x, init.GlorotNormal(), init.Normal(init_w), softmax)
         elif x_dist == 'gaussian':
-            l_px, l_px_mu, l_px_logvar = stochastic_layer(l_px, n_x, self.sym_samples, px_nonlinearity)
+            l_px, l_px_mu, l_px_logvar = stochastic_layer(l_px, n_x, self.sym_samples, nonlin=px_nonlinearity)
         elif x_dist == 'linear':
             l_px = DenseLayer(l_px, n_x, nonlinearity=None)
 
@@ -147,17 +142,17 @@ class RVAE(Model):
         # Predefined functions
         inputs = {self.l_x_in: self.sym_x}
         outputs = get_output(l_qz, inputs, deterministic=True)
-        self.f_qz = theano.function([self.sym_x, self.sym_samples], outputs)
+        self.f_qz = theano.function([self.sym_x, self.sym_samples, self.sym_warmup], outputs, on_unused_input='warn')
 
         inputs = {l_qz: self.sym_z}
         outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(1, 2))
-        self.f_px = theano.function([self.sym_z, self.sym_samples], outputs)
+        self.f_px = theano.function([self.sym_z, self.sym_samples, self.sym_warmup], outputs, on_unused_input='warn')
 
         outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(1, 2))
-        self.f_mu = theano.function([self.sym_z, self.sym_samples], outputs)
+        self.f_mu = theano.function([self.sym_z, self.sym_samples], outputs, on_unused_input='warn')
 
         outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(1, 2))
-        self.f_var = theano.function([self.sym_z, self.sym_samples], outputs)
+        self.f_var = theano.function([self.sym_z, self.sym_samples, self.sym_warmup], outputs, on_unused_input='warn')
 
         # Define model parameters
         self.model_params = get_all_params([self.l_px])
@@ -193,9 +188,8 @@ class RVAE(Model):
         elif self.x_dist == 'linear':
             l_log_px = self.l_px
 
-        self.sym_warmup = T.fscalar('warmup')
         def lower_bound(log_pz, log_qz, log_px):
-            return log_px + (log_pz - log_qz)*(1. - self.sym_warmup - 0.1)
+            return log_px + (log_pz - log_qz)*(1.1 - self.sym_warmup)
 
         # Lower bound
         out_layers = [l_log_pz, l_log_qz, l_log_px]
@@ -232,8 +226,8 @@ class RVAE(Model):
         clip_grad, max_norm = 1, 5
         mgrads = total_norm_constraint(grads_collect, max_norm=max_norm)
         mgrads = [T.clip(g, -clip_grad, clip_grad) for g in mgrads]
-        #updates = adam(mgrads, self.trainable_model_params, self.sym_lr, sym_beta1, sym_beta2)
-        updates = rmsprop(mgrads, self.trainable_model_params, self.sym_lr + (0*sym_beta1*sym_beta2))
+        updates = adam(mgrads, self.trainable_model_params, self.sym_lr, sym_beta1, sym_beta2)
+        # updates = rmsprop(mgrads, self.trainable_model_params, self.sym_lr + (0*sym_beta1*sym_beta2))
 
         # Training function
         x_batch = self.sh_train_x[self.batch_slice]
@@ -243,7 +237,7 @@ class RVAE(Model):
         givens = {self.sym_x: x_batch}
         inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2, self.sym_samples, self.sym_warmup]
         outputs = [log_px.mean(), log_pz.mean(), log_qz.mean(), elbo, self.sym_warmup]
-        f_train = theano.function(inputs=inputs, outputs=outputs, givens=givens, updates=updates)
+        f_train = theano.function(inputs=inputs, outputs=outputs, givens=givens, updates=updates, on_unused_input='warn')
 
         # Default training args. Note that these can be changed during or prior to training.
         self.train_args['inputs']['batchsize'] = 100
@@ -260,7 +254,7 @@ class RVAE(Model):
 
         # Validation and test function
         givens = {self.sym_x: self.sh_test_x}
-        f_test = theano.function(inputs=[self.sym_samples, self.sym_warmup], outputs=[elbo], givens=givens)
+        f_test = theano.function(inputs=[self.sym_samples, self.sym_warmup], outputs=[elbo], givens=givens, on_unused_input='warn')
 
         # Test args.  Note that these can be changed during or prior to training.
         self.test_args['inputs']['samples'] = 1
