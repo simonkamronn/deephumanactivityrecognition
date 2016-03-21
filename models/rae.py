@@ -45,8 +45,8 @@ class RAE(Model):
         self.sym_x = T.tensor3('x')  # inputs
 
         # Assist methods for collecting the layers
-        def dense_layer(layer_in, n, dist_w=init.GlorotNormal, dist_b=init.Normal, nonlinearity=None):
-            dense = DenseLayer(layer_in, n, dist_w(hid_w), dist_b(init_w), nonlinearity=nonlinearity)
+        def dense_layer(layer_in, n, dist_w=init.GlorotNormal, dist_b=init.Normal):
+            dense = DenseLayer(layer_in, n, dist_w(hid_w), dist_b(init_w), nonlinearity=None)
             if batchnorm:
                 dense = BatchNormLayer(dense)
             return NonlinearityLayer(dense, self.transf)
@@ -77,7 +77,7 @@ class RAE(Model):
         l_enc_forward = lstm_layer(l_x_in, enc_rnn, return_final=True, backwards=False, name='enc_forward')
         l_enc_backward = lstm_layer(l_x_in, enc_rnn, return_final=True, backwards=True, name='enc_backward')
         l_enc_concat = ConcatLayer([l_enc_forward, l_enc_backward], axis=-1)
-        l_enc = dense_layer(l_enc_concat, enc_rnn, nonlinearity=None)
+        l_enc = dense_layer(l_enc_concat, enc_rnn)
 
         # RNN decoder implementation
         l_dec_repeat = RepeatLayer(l_enc, n=seq_length)
@@ -93,7 +93,7 @@ class RAE(Model):
             l_px = dense_layer(l_px, hid)
 
         # Output
-        l_px = dense_layer(l_px, n_x, nonlinearity=None)
+        l_px = DenseLayer(l_px, n_x, nonlinearity=None)
         self.l_px = ReshapeLayer(l_px, (-1, seq_length, n_x))
         self.l_x_in = l_x_in
 
