@@ -62,10 +62,10 @@ class RVAE(Model):
             return NonlinearityLayer(dense, self.transf)
 
         def stochastic_layer(layer_in, n, samples, nonlin=None):
-            mu = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
+            mu = DenseLayer(layer_in, n, W=init.Normal(init_w, mean=1.), b=init.Normal(init_w), nonlinearity=nonlin)
 
             logvar = DenseLayer(layer_in, n, init.Normal(init_w), init.Normal(init_w), nonlin)
-            # logvar = ConstrainLayer(logvar, scale=1, max=T.log(-0.999 * self.sym_warmup + 1.0999 + 1))
+            logvar = ConstrainLayer(logvar, scale=1, max=T.log(-0.999 * self.sym_warmup + 1.0999 + .6))
             return SampleLayer(mu, logvar, eq_samples=samples, iw_samples=1), mu, logvar
 
         def lstm_layer(input, nunits, return_final, backwards=False, name='LSTM'):
@@ -189,7 +189,7 @@ class RVAE(Model):
             l_log_px = self.l_px
 
         def lower_bound(log_pz, log_qz, log_px):
-            return log_px + (log_pz - log_qz)*(1.1 - self.sym_warmup)
+            return log_px*(self.sym_warmup + 0.1) + (log_pz - log_qz)*(1.1 - self.sym_warmup)
 
         # Lower bound
         out_layers = [l_log_pz, l_log_qz, l_log_px]

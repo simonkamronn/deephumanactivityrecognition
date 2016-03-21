@@ -46,7 +46,10 @@ class TrainModel(Train):
             if anneal is not None:
                 for t in anneal:
                     key, freq, rate, min_val = t
-                    new_val = train_args['inputs'][key] * rate
+                    if isinstance(rate, int) or isinstance(rate, float):
+                        new_val = train_args['inputs'][key] * rate
+                    else:
+                        new_val = rate(train_args['inputs'][key])
                     if new_val < min_val:
                         train_args['inputs'][key] = min_val
                     elif epoch % freq == 0:
