@@ -12,50 +12,50 @@ from sklearn.cross_validation import train_test_split
 def run_vrae_har():
     seed = np.random.randint(1, 2147462579)
 
-    def sinus_seq(period, samples, length):
-        X = np.linspace(-np.pi*(samples/period), np.pi*(samples/period), samples)
-        X = np.reshape(np.sin(X), (-1, length, 1))
-        X += np.random.randn(*X.shape)*0.1
-        # X = (X - np.min(X))/(np.max(X) - np.min(X))
-        return X, np.ones((samples/length, 1))
-
-    X1, y1 = sinus_seq(20, 100000, 40)
-    X2, y2 = sinus_seq(12, 100000, 40)
-    X3, y3 = sinus_seq(8, 100000, 40)
-
-    X = np.concatenate((X1, X2, X3)).astype('float32')
-    y = np.concatenate((y1*0, y2*1, y3*2), axis=0).astype('int')[:, 0]
-    y_unique = np.unique(list(y))
-
-    y = one_hot(y, len(y_unique))
-
-    dim_samples, dim_sequence, dim_features = X.shape
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
-
-    # ##
-    # # HAR data
-    # X, y, users, stats = har.load()
-    # limited_labels = y < 5
-    # y = y[limited_labels]
-    # X = X[limited_labels]
-    # users = users[limited_labels]
+    # def sinus_seq(period, samples, length):
+    #     X = np.linspace(-np.pi*(samples/period), np.pi*(samples/period), samples)
+    #     X = np.reshape(np.sin(X), (-1, length, 1))
+    #     X += np.random.randn(*X.shape)*0.1
+    #     # X = (X - np.min(X))/(np.max(X) - np.min(X))
+    #     return X, np.ones((samples/length, 1))
     #
-    # X -= X.mean(axis=0)
+    # X1, y1 = sinus_seq(20, 100000, 40)
+    # X2, y2 = sinus_seq(12, 100000, 40)
+    # X3, y3 = sinus_seq(8, 100000, 40)
     #
-    # # Compress labels
-    # for idx, label in enumerate(np.unique(y)):
-    #     if not np.equal(idx, label):
-    #         y[y == label] = idx
+    # X = np.concatenate((X1, X2, X3)).astype('float32')
+    # y = np.concatenate((y1*0, y2*1, y3*2), axis=0).astype('int')[:, 0]
+    # y_unique = np.unique(list(y))
     #
-    # y_unique = np.unique(y)
     # y = one_hot(y, len(y_unique))
     #
     # dim_samples, dim_sequence, dim_features = X.shape
-    # num_classes = len(y_unique)
-    #
-    # # Split into train and test stratified by users
-    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=users)
-    # ##
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
+
+    ##
+    # HAR data
+    X, y, users, stats = har.load()
+    limited_labels = y < 5
+    y = y[limited_labels]
+    X = X[limited_labels]
+    users = users[limited_labels]
+
+    X -= X.mean(axis=0)
+
+    # Compress labels
+    for idx, label in enumerate(np.unique(y)):
+        if not np.equal(idx, label):
+            y[y == label] = idx
+
+    y_unique = np.unique(y)
+    y = one_hot(y, len(y_unique))
+
+    dim_samples, dim_sequence, dim_features = X.shape
+    num_classes = len(y_unique)
+
+    # Split into train and test stratified by users
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=users)
+    ##
 
     # Combine in sets
     train_set = (X_train, y_train)
@@ -75,7 +75,7 @@ def run_vrae_har():
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)
     # Update the default function arguments.
     train_args['inputs']['batchsize'] = 100
-    train_args['inputs']['learningrate'] = 1e-2
+    train_args['inputs']['learningrate'] = 1e-3
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
     train_args['inputs']['samples'] = 1
