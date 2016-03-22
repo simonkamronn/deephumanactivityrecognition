@@ -8,6 +8,7 @@ from models.conv_vae import CVAE
 import matplotlib.pyplot as plt
 from sklearn.cross_validation import train_test_split
 import numpy as np
+from data_preparation.load_data import LoadHAR
 
 
 def run_cvae():
@@ -29,7 +30,12 @@ def run_cvae():
     # dim_samples, dim_sequence, dim_features = X.shape
     # X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
 
-    X, y, users, stats = har.load()
+    # X, y, users, stats = har.load()
+
+    n_samples, step = 25, 25
+    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
+                        step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
+    X, y, name, users, stats = load_data.uci_hapt()
 
     limited_labels = y < 5
     y = y[limited_labels]
@@ -68,7 +74,7 @@ def run_cvae():
                [64, 1, 2],
                [64, 1, 2],
                [64, 1, 2]]
-    model = CVAE(n_x=int(n_x), n_z=64, px_hid=[64], qz_hid=[64], filters=filters, seq_length=int(seq),
+    model = CVAE(n_x=int(n_x), n_z=64, px_hid=[], qz_hid=[64], filters=filters, seq_length=int(seq),
                  nonlinearity=rectify, batchnorm=False, x_dist='gaussian')
 
     # Copy script to output folder
