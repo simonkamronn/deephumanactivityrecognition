@@ -68,7 +68,7 @@ def run_vrae_har():
     bs = n / n_batches  # The batchsize.
 
     # Initialize the auxiliary deep generative model.
-    model = RVAE(n_x=n_x, n_z=64, qz_hid=[64], px_hid=[64], enc_rnn=64, dec_rnn=64, seq_length=seq,
+    model = RVAE(n_x=n_x, n_z=128, qz_hid=[256, 256], px_hid=[256, 256], enc_rnn=128, dec_rnn=128, seq_length=seq,
                  nonlinearity=rectify, batchnorm=False, x_dist='linear', px_nonlinearity=None)
 
     # Get the training functions.
