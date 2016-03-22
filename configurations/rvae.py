@@ -1,4 +1,3 @@
-import theano
 from training.train import TrainModel
 from lasagne_extensions.nonlinearities import rectify, softplus
 from data_loaders import mnist, har
@@ -7,6 +6,7 @@ from models.rvae import RVAE
 import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.cross_validation import train_test_split
+from data_preparation.load_data import LoadHAR
 
 
 def run_vrae_har():
@@ -34,7 +34,13 @@ def run_vrae_har():
 
     ##
     # HAR data
-    X, y, users, stats = har.load()
+    # X, y, users, stats = har.load()
+
+    n_samples, step = 25, 25
+    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
+                        step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
+    X, y, name, users, stats = load_data.uci_hapt()
+
     limited_labels = y < 5
     y = y[limited_labels]
     X = X[limited_labels]
@@ -83,7 +89,7 @@ def run_vrae_har():
 
     def custom_evaluation(model, path):
         plt.clf()
-        f, axarr = plt.subplots(nrows=len(y_unique), ncols=1)
+        f, axarr = plt.subplots(nrows=len(y_unique), ncols=2)
         for idx, y_l in enumerate(y_unique):
             act_idx = np.argmax(test_set[1], axis=1) == y_l
             test_act = test_set[0][act_idx]
@@ -91,8 +97,8 @@ def run_vrae_har():
             z = model.f_qz(test_act, 1, 0.1)
             xhat = model.f_px(test_act, z, 1, 0.1)
 
-            axarr[idx].plot(test_act[:2].reshape(-1, dim_features), color='red', label="x")
-            axarr[idx].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted', label="xhat")
+            axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red', label="x")
+            axarr[idx, 0].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted', label="xhat")
 
             if model.x_dist == "gaussian":
                 mu = model.f_mu(test_act, z, 1)
