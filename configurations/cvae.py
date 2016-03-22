@@ -1,4 +1,5 @@
-import theano
+from os import path, mkdir
+import shutil
 from training.train import TrainModel
 from lasagne_extensions.nonlinearities import rectify
 from data_loaders import mnist, har
@@ -63,12 +64,19 @@ def run_cvae():
 
     # Initialize the auxiliary deep generative model.
     # [num_filters, stride, pool]
-    filters = [[128, 1, 2],
-               [128, 1, 2],
-               [128, 1, 2],
-               [128, 1, 2]]
-    model = CVAE(n_x=int(n_x), n_z=128, px_hid=[128], qz_hid=[128], filters=filters, seq_length=int(seq),
+    filters = [[64, 1, 2],
+               [64, 1, 2],
+               [64, 1, 2],
+               [64, 1, 2]]
+    model = CVAE(n_x=int(n_x), n_z=64, px_hid=[64], qz_hid=[64], filters=filters, seq_length=int(seq),
                  nonlinearity=rectify, batchnorm=False, x_dist='gaussian')
+
+    # Copy script to output folder
+    scriptpath = path.realpath(__file__)
+    filename = path.basename(scriptpath)
+    basepath = model.get_root_path() + '/script/'
+    mkdir(basepath)
+    shutil.copy(scriptpath, basepath + filename)
 
     # Get the training functions.
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)
