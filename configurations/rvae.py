@@ -79,7 +79,7 @@ def run_vrae_har():
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
     train_args['inputs']['samples'] = 1
-    train_args['inputs']['warmup'] = (1 + .1)  # 0.5 means equal px and (pz-qz)
+    train_args['inputs']['warmup'] = (1 + .1)
 
     def custom_evaluation(model, path):
         plt.clf()
