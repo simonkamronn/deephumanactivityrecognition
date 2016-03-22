@@ -1,4 +1,4 @@
-from os import path
+from os import makedirs
 from utils import copy_script, image_to_movie
 from training.train import TrainModel
 from lasagne_extensions.nonlinearities import rectify, softplus
@@ -45,7 +45,7 @@ def run_vrae_har():
                         step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
     X, y, name, users, stats = load_data.uci_hapt()
 
-    limited_labels = y < 5
+    limited_labels = y < 100
     y = y[limited_labels]
     X = X[limited_labels].astype(np.float32)
     users = users[limited_labels]
@@ -83,6 +83,9 @@ def run_vrae_har():
 
     # Copy script to output folder
     copy_script(__file__, model)
+
+    # Create output path for PCA plot
+    makedirs(model.get_root_path() + '/training custom evals/pca')
 
     # Get the training functions.
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)
@@ -137,7 +140,7 @@ def run_vrae_har():
 
     # Define training loop. Output training evaluations every 1 epoch
     # and the custom evaluation method every 10 epochs.
-    train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=1, f_custom_eval=custom_evaluation)
+    train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=20, f_custom_eval=custom_evaluation)
     train.add_initial_training_notes("Training the vrae with bn %s. seed %i." % (str(model.batchnorm), seed))
     train.train_model(f_train, train_args,
                       f_test, test_args,
