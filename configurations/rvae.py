@@ -126,14 +126,13 @@ def run_vrae_har():
 
         # Plot PCA decomp of Z
         z_pca = PCA(n_components=2).fit_transform(z_)
-
         plt.clf()
         plt.figure()
         for c, i in zip(['r', 'b'], set(y_unique)):
             plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=c, alpha=0.8)
         plt.legend()
         plt.title('PCA of Z')
-        plt.savefig(path.replace('custom_eval_plot', 'z_pca'))
+        plt.savefig(path.replace('custom_eval_plot', 'pca/z'))
         plt.close()
 
     # Define training loop. Output training evaluations every 1 epoch
