@@ -1,13 +1,14 @@
-from training.train import TrainModel
-from lasagne_extensions.nonlinearities import rectify
-from data_preparation.load_data import LoadHAR
-from models import ADGMSSL
+import matplotlib
 import numpy as np
 from sklearn.cross_validation import train_test_split
 from sklearn.metrics import confusion_matrix
 
-from har_utils import one_hot, expand_target, magnitude
-import matplotlib
+from data_preparation.load_data import LoadHAR
+from lasagne_extensions.nonlinearities import rectify
+from models import ADGMSSL
+from old.har_utils import one_hot
+from training.train import TrainModel
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 plt.ioff()

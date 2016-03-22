@@ -12,10 +12,8 @@ import glob as glob
 import numpy as np
 from scipy.io import loadmat
 from scipy.signal import resample
-from sklearn.cross_validation import StratifiedShuffleSplit, KFold
 import itertools
-from har_utils import roll, pitch, expand_target, split_signal, magnitude, rolling_window, lowpass_filter
-from sklearn import preprocessing
+from old.har_utils import roll, pitch, expand_target, split_signal, magnitude, rolling_window, lowpass_filter
 import cPickle as pickle
 
 ACTIVITY_MAP = {0: 'WALKING', 1: 'CYCLING', 2: 'RUNNING', 3: 'STAIRS', 4: 'JOGGING', 5: 'LAYING',

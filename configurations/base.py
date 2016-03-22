@@ -1,12 +1,14 @@
 import datetime
 import time
+
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 plt.ioff()
 import numpy as np
 from sklearn.metrics import confusion_matrix
-from har_utils import one_hot, expand_target, magnitude, rolling_window
+from old.har_utils import one_hot, rolling_window
 
 
 class ModelConfiguration(object):

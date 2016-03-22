@@ -4,7 +4,7 @@ from training.train import TrainModel
 from lasagne_extensions.nonlinearities import rectify
 from data_loaders import mnist, har
 from data_loaders.data_helper import one_hot
-from models.conv_vae import CVAE
+from models.cvae import CVAE
 import matplotlib.pyplot as plt
 from sklearn.cross_validation import train_test_split
 import numpy as np

@@ -1,23 +1,19 @@
 #%%
-import time
-import math
-import sys
 import argparse
 import cPickle as pickle
 import copy
 import os
-import six
+import time
 
-import numpy as np
-from chainer import cuda, Variable, FunctionSet, optimizers
 import chainer.functions as F
-from VRAE_chainer import VRAE, make_initial_state
+import numpy as np
+from chainer import cuda, optimizers
+from sklearn.cross_validation import train_test_split
 
 import dataset
-
-from sklearn.cross_validation import train_test_split
+from VRAE_chainer import VRAE, make_initial_state
 from data_preparation.load_data import LoadHAR
-from har_utils import one_hot
+from old.har_utils import one_hot
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_path',      type=str,   default="dataset")

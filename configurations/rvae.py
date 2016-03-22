@@ -69,7 +69,7 @@ def run_vrae_har():
 
     # Initialize the auxiliary deep generative model.
     model = RVAE(n_x=n_x, n_z=128, qz_hid=[256, 256], px_hid=[256, 256], enc_rnn=128, dec_rnn=128, seq_length=seq,
-                 nonlinearity=rectify, batchnorm=False, x_dist='linear', px_nonlinearity=None)
+                 nonlinearity=rectify, batchnorm=False, x_dist='gaussian', px_nonlinearity=None)
 
     # Get the training functions.
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)
