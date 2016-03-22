@@ -1,5 +1,5 @@
 from os import path
-from utils import copy_script
+from utils import copy_script, image_to_movie
 from training.train import TrainModel
 from lasagne_extensions.nonlinearities import rectify, softplus
 from data_loaders import mnist, har
@@ -95,7 +95,7 @@ def run_vrae_har():
     def custom_evaluation(model, path):
         plt.clf()
         f, axarr = plt.subplots(nrows=len(y_unique), ncols=2)
-        z_ = np.zeros((model.nz, len(y)))
+        z_ = np.zeros((model.n_z, len(y)))
         for idx, y_l in enumerate(y_unique):
             act_idx = np.argmax(test_set[1], axis=1) == y_l
             test_act = test_set[0][act_idx]
@@ -132,6 +132,9 @@ def run_vrae_har():
                       # training with a tuple of (var_name, every, scale constant, minimum value).
                       anneal=[("learningrate", 100, 0.75, 3e-5),
                               ("warmup", 1, 0.99, 0.1)])
+
+    image_to_movie.create(model.get_root_path() + 'training_custom_evals/')
+
 
 if __name__ == "__main__":
     run_vrae_har()
