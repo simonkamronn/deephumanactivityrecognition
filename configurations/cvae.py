@@ -38,7 +38,7 @@ def run_cvae():
 
     limited_labels = y < 5
     y = y[limited_labels]
-    X = X[limited_labels]
+    X = X[limited_labels].astype(np.float32)
     users = users[limited_labels]
 
     X -= X.mean(axis=0)
