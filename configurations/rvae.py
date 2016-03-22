@@ -7,8 +7,10 @@ from data_loaders.data_helper import one_hot
 from models.rvae import RVAE
 import numpy as np
 import matplotlib.pyplot as plt
+plt.style.use('ggplot')
 from sklearn.cross_validation import train_test_split
 from data_preparation.load_data import LoadHAR
+from sklearn.decomposition import PCA
 
 
 def run_vrae_har():
@@ -92,16 +94,19 @@ def run_vrae_har():
     train_args['inputs']['samples'] = 1
     train_args['inputs']['warmup'] = (1 + .1)
 
+    y_test = np.argmax(test_set[1], axis=1)
     def custom_evaluation(model, path):
         plt.clf()
         f, axarr = plt.subplots(nrows=len(y_unique), ncols=2)
-        z_ = np.zeros((model.n_z, len(y)))
+        z_ = np.empty((0, model.n_z))
+        y_ = np.empty((0, ))
         for idx, y_l in enumerate(y_unique):
-            act_idx = np.argmax(test_set[1], axis=1) == y_l
+            act_idx = y_test == y_l
             test_act = test_set[0][act_idx]
 
             z = model.f_qz(test_act, 1, 0.1)
-            z_[:, act_idx] = z
+            z_ = np.concatenate((z_, z))
+            y_ = np.concatenate((y_, np.ones((len(test_act), ))*y_l))
             xhat = model.f_px(test_act, z, 1, 0.1)
 
             axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red', label="x")
@@ -118,6 +123,18 @@ def run_vrae_har():
         f.set_size_inches(12, 10)
         f.savefig(path, dpi=100, format='png')
         plt.close(f)
+
+        # Plot PCA decomp of Z
+        z_pca = PCA(n_components=2).fit_transform(z_)
+
+        plt.clf()
+        plt.figure()
+        for c, i in zip(['r', 'b'], set(y_unique)):
+            plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=c, alpha=0.8)
+        plt.legend()
+        plt.title('PCA of Z')
+        plt.savefig(path.replace('custom_eval_plot', 'z_pca'))
+        plt.close()
 
     # Define training loop. Output training evaluations every 1 epoch
     # and the custom evaluation method every 10 epochs.

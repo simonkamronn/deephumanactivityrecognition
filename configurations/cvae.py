@@ -120,7 +120,7 @@ def run_cvae():
                       f_test, test_args,
                       f_validate, validate_args,
                       n_train_batches=n_batches,
-                      n_epochs=10000,
+                      n_epochs=1000,
                       anneal=[("learningrate", 100, 0.75, 3e-5),
                               ("warmup", 5, 0.99, 0.1)])
 
