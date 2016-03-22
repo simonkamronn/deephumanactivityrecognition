@@ -80,7 +80,7 @@ def run_vrae_har():
                  nonlinearity=rectify, batchnorm=False, x_dist='gaussian', px_nonlinearity=None)
 
     # Copy script to output folder
-    copy_script(path.realpath(__file__), model.get_root_path())
+    copy_script(__file__, model)
 
     # Get the training functions.
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)

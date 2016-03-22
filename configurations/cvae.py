@@ -73,11 +73,11 @@ def run_cvae():
                [128, 1, 2],
                [128, 1, 2],
                [128, 1, 2]]
-    model = CVAE(n_x=int(n_x), n_z=128, px_hid=[], qz_hid=[128], filters=filters, seq_length=int(seq),
+    model = CVAE(n_x=int(n_x), n_z=128, px_hid=[128], qz_hid=[128], filters=filters, seq_length=int(seq),
                  nonlinearity=rectify, batchnorm=False, x_dist='gaussian')
 
     # Copy script to output folder
-    copy_script(path.realpath(__file__), model.get_root_path())
+    copy_script(__file__, model)
 
     # Get the training functions.
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)
