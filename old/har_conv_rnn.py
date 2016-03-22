@@ -1,14 +1,16 @@
+import datetime
+import time
+from os import rmdir
+
+import numpy as np
+from lasagne.nonlinearities import rectify, softmax
+from sklearn.cross_validation import LeaveOneLabelOut
+
+from data_preparation.load_data import LoadHAR, ACTIVITY_MAP
 from models.wconvrnn import wconvRNN
 from training.train import TrainModel
-from lasagne.nonlinearities import rectify, softmax, leaky_rectify
-from data_preparation.load_data import LoadHAR, ACTIVITY_MAP
-import numpy as np
-from sklearn.cross_validation import LeaveOneLabelOut
 from utils import env_paths as paths
-import time
-import datetime
-from os import rmdir
-from har_utils import one_hot
+from utils.har_utils import one_hot
 
 
 def main():

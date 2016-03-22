@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 plt.ioff()
 import numpy as np
 from sklearn.metrics import confusion_matrix
-from old.har_utils import one_hot, rolling_window
+from utils.har_utils import one_hot, rolling_window
 
 
 class ModelConfiguration(object):

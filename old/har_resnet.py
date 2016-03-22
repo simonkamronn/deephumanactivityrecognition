@@ -6,15 +6,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 from lasagne.layers import get_all_layers, get_output_shape
 from lasagne.nonlinearities import rectify, softmax
+from lasagne_extensions.confusionmatrix import ConfusionMatrix
 from sklearn.cross_validation import LeaveOneLabelOut
 from sklearn.metrics import confusion_matrix
 from sklearn.preprocessing import StandardScaler
+
 from data_preparation.load_data import LoadHAR, ACTIVITY_MAP
-from lasagne_extensions.confusionmatrix import ConfusionMatrix
 from models.resnet import ResNet
 from training.train import TrainModel
 from utils import env_paths as paths
-from har_utils import one_hot
+from utils.har_utils import one_hot
+
 
 def main():
     add_pitch, add_roll, add_filter = False, False, True

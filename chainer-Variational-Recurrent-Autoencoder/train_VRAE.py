@@ -13,7 +13,7 @@ from sklearn.cross_validation import train_test_split
 import dataset
 from VRAE_chainer import VRAE, make_initial_state
 from data_preparation.load_data import LoadHAR
-from old.har_utils import one_hot
+from utils.har_utils import one_hot
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--data_path',      type=str,   default="dataset")

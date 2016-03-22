@@ -13,7 +13,7 @@ import numpy as np
 from scipy.io import loadmat
 from scipy.signal import resample
 import itertools
-from old.har_utils import roll, pitch, expand_target, split_signal, magnitude, rolling_window, lowpass_filter
+from utils.har_utils import roll, pitch, expand_target, split_signal, magnitude, rolling_window, lowpass_filter
 import cPickle as pickle
 
 ACTIVITY_MAP = {0: 'WALKING', 1: 'CYCLING', 2: 'RUNNING', 3: 'STAIRS', 4: 'JOGGING', 5: 'LAYING',

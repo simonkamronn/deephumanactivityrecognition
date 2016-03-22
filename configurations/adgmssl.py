@@ -6,8 +6,8 @@ from sklearn.metrics import confusion_matrix
 from data_preparation.load_data import LoadHAR
 from lasagne_extensions.nonlinearities import rectify
 from models import ADGMSSL
-from old.har_utils import one_hot
 from training.train import TrainModel
+from utils.har_utils import one_hot
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
