@@ -133,7 +133,7 @@ def run_vrae_har():
                       anneal=[("learningrate", 100, 0.75, 3e-5),
                               ("warmup", 1, 0.99, 0.1)])
 
-    image_to_movie.create(model.get_root_path() + 'training_custom_evals/')
+    image_to_movie.create(model.get_root_path() + '/training_custom_evals/', rate=3)
 
 
 if __name__ == "__main__":

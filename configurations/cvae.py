@@ -1,5 +1,5 @@
 from os import path
-from utils import copy_script
+from utils import copy_script, image_to_movie
 from training.train import TrainModel
 from lasagne_extensions.nonlinearities import rectify
 from data_loaders import mnist, har
@@ -114,7 +114,7 @@ def run_cvae():
 
     # Define training loop. Output training evaluations every 1 epoch
     # and the custom evaluation method every 10 epochs.
-    train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=100, f_custom_eval=custom_evaluation)
+    train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=10, f_custom_eval=custom_evaluation)
     train.add_initial_training_notes("Training the rae with bn %s. seed %i." % (str(model.batchnorm), seed))
     train.train_model(f_train, train_args,
                       f_test, test_args,
@@ -123,6 +123,8 @@ def run_cvae():
                       n_epochs=10000,
                       anneal=[("learningrate", 100, 0.75, 3e-5),
                               ("warmup", 5, 0.99, 0.1)])
+
+    image_to_movie.create(model.get_root_path() + '/training_custom_evals/', rate=3)
 
 if __name__ == "__main__":
     run_cvae()
