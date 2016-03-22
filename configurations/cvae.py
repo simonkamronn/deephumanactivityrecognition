@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 from sklearn.cross_validation import train_test_split
 import numpy as np
 from data_preparation.load_data import LoadHAR
+from sklearn.decomposition import PCA
+
 
 def run_cvae():
     seed = np.random.randint(1, 2147462579)
@@ -91,12 +93,16 @@ def run_cvae():
     def custom_evaluation(model, path):
         plt.clf()
         f, axarr = plt.subplots(nrows=len(np.unique(y)), ncols=2)
+        z_ = np.empty((0, model.n_z))
+        y_ = np.empty((0, ))
         for idx, y_l in enumerate(np.unique(y)):
             act_idx = test_set[1] == y_l
             test_act = test_set[0][act_idx[:, 0]]
 
-            # z = model.f_qz(test_act, 1)
-            z = test_act
+            z = model.f_qz(test_act, 1)
+            z_ = np.concatenate((z_, z))
+            y_ = np.concatenate((y_, np.ones((len(test_act), ))*y_l))
+
             xhat = model.f_px(z, 1)
             mu = model.f_mu(z, 1)
             var = np.exp(model.f_var(z, 1))
@@ -111,6 +117,17 @@ def run_cvae():
         f.set_size_inches(12, 10)
         f.savefig(path, dpi=100, format='png')
         plt.close(f)
+
+        # Plot PCA decomp of Z
+        z_pca = PCA(n_components=2).fit_transform(z_)
+        plt.clf()
+        plt.figure()
+        for c, i in zip(['r', 'b'], set(y_unique)):
+            plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=c, alpha=0.8)
+        plt.legend()
+        plt.title('PCA of Z')
+        plt.savefig(path.replace('custom_eval_plot', 'pca/z'))
+        plt.close()
 
     # Define training loop. Output training evaluations every 1 epoch
     # and the custom evaluation method every 10 epochs.

@@ -149,15 +149,15 @@ class CVAE(Model):
         outputs = get_output(l_qz, inputs, deterministic=True)
         self.f_qz = theano.function([self.sym_x, self.sym_samples], outputs)
 
-        inputs = {self.l_x_in: self.sym_x}
+        inputs = {l_qz: self.sym_z}
         outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(1, 2))
-        self.f_px = theano.function([self.sym_x, self.sym_samples], outputs)
+        self.f_px = theano.function([self.sym_z, self.sym_samples], outputs)
 
         outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(1, 2))
-        self.f_mu = theano.function([self.sym_x, self.sym_samples], outputs)
+        self.f_mu = theano.function([self.sym_z, self.sym_samples], outputs)
 
         outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(1, 2))
-        self.f_var = theano.function([self.sym_x, self.sym_samples], outputs)
+        self.f_var = theano.function([self.sym_z, self.sym_samples], outputs)
 
         # Define model parameters
         self.model_params = get_all_params([self.l_px])
