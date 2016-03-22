@@ -1,4 +1,4 @@
-from models.conv_brnn import conv_BRNN
+from models.cbrnn import conv_BRNN
 from training.train import TrainModel
 from lasagne.nonlinearities import rectify, softmax, leaky_rectify, softplus
 import load_data as ld
