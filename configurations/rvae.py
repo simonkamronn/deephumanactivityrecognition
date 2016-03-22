@@ -95,11 +95,13 @@ def run_vrae_har():
     def custom_evaluation(model, path):
         plt.clf()
         f, axarr = plt.subplots(nrows=len(y_unique), ncols=2)
+        z_ = np.zeros((model.nz, len(y)))
         for idx, y_l in enumerate(y_unique):
             act_idx = np.argmax(test_set[1], axis=1) == y_l
             test_act = test_set[0][act_idx]
 
             z = model.f_qz(test_act, 1, 0.1)
+            z_[:, act_idx] = z
             xhat = model.f_px(test_act, z, 1, 0.1)
 
             axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red', label="x")
@@ -119,7 +121,7 @@ def run_vrae_har():
 
     # Define training loop. Output training evaluations every 1 epoch
     # and the custom evaluation method every 10 epochs.
-    train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=10, f_custom_eval=custom_evaluation)
+    train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=1, f_custom_eval=custom_evaluation)
     train.add_initial_training_notes("Training the vrae with bn %s. seed %i." % (str(model.batchnorm), seed))
     train.train_model(f_train, train_args,
                       f_test, test_args,

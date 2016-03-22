@@ -231,8 +231,8 @@ class RVAE(Model):
         cost = (elbo * n + weight_priors) / -n
 
         # Add reconstruction cost
-        xhat = get_output(self.l_px, inputs).mean(axis=(1, 2))
-        cost += aggregate(squared_error(xhat, self.sym_x), mode='mean')
+        # xhat = get_output(self.l_px, inputs).mean(axis=(1, 2))
+        # cost += aggregate(squared_error(xhat, self.sym_x), mode='mean')
 
         grads_collect = T.grad(cost, self.trainable_model_params)
         sym_beta1 = T.scalar('beta1')
