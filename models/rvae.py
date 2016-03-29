@@ -151,18 +151,18 @@ class RVAE(Model):
         # Predefined functions
         inputs = {self.l_x_in: self.sym_x}
         outputs = get_output(l_qz, inputs, deterministic=True)
-        self.f_qz = theano.function([self.sym_x, self.sym_samples, self.sym_warmup], outputs, on_unused_input='warn')
+        self.f_qz = theano.function([self.sym_x, self.sym_samples], outputs, on_unused_input='warn')
 
         inputs = {l_qz: self.sym_z, self.l_x_in: self.sym_x}
         outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(1, 2))
-        self.f_px = theano.function([self.sym_x, self.sym_z, self.sym_samples, self.sym_warmup], outputs, on_unused_input='warn')
+        self.f_px = theano.function([self.sym_x, self.sym_z, self.sym_samples], outputs, on_unused_input='warn')
 
         if x_dist == "gaussian":
             outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(1, 2))
             self.f_mu = theano.function([self.sym_x, self.sym_z, self.sym_samples], outputs, on_unused_input='ignore')
 
             outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(1, 2))
-            self.f_var = theano.function([self.sym_x, self.sym_z, self.sym_samples, self.sym_warmup], outputs, on_unused_input='ignore')
+            self.f_var = theano.function([self.sym_x, self.sym_z, self.sym_samples], outputs, on_unused_input='ignore')
 
         # Define model parameters
         self.model_params = get_all_params([self.l_px])

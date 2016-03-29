@@ -42,7 +42,7 @@ def run_vrae_har():
 
     n_samples, step = 25, 25
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
-                        step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
+                        step=step, normalize='segments', comp_magnitude=False, simple_labels=True, common_labels=True)
     X, y, name, users, stats = load_data.uci_hapt()
 
     limited_labels = y < 100
@@ -107,17 +107,17 @@ def run_vrae_har():
             act_idx = y_test == y_l
             test_act = test_set[0][act_idx]
 
-            z = model.f_qz(test_act, 1, 0.1)
+            z = model.f_qz(test_act, 1)
             z_ = np.concatenate((z_, z))
             y_ = np.concatenate((y_, np.ones((len(test_act), ))*y_l))
-            xhat = model.f_px(test_act, z, 1, 0.1)
+            xhat = model.f_px(test_act, z, 1)
 
             axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red', label="x")
             axarr[idx, 0].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted', label="xhat")
 
             if model.x_dist == "gaussian":
                 mu = model.f_mu(test_act, z, 1)
-                var = np.exp(model.f_var(test_act, z, 1, 0.1))
+                var = np.exp(model.f_var(test_act, z, 1))
 
                 axarr[idx, 1].plot(mu[:2].reshape(-1, dim_features), label="mu")
                 axarr[idx, 1].plot(var[:2].reshape(-1, dim_features), label="var")
@@ -152,7 +152,7 @@ def run_vrae_har():
                       anneal=[("learningrate", 100, 0.75, 3e-5),
                               ("warmup", 1, 0.99, 0.1)])
 
-    image_to_movie.create(model.get_root_path() + '/training_custom_evals/', rate=3)
+    image_to_movie.create(model.get_root_path() + '/training custom evals', rate=3)
 
 
 if __name__ == "__main__":
