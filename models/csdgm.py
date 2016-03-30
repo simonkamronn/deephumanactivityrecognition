@@ -229,7 +229,8 @@ class CSDGM(Model):
         self.l_pa_mu = ReshapeLayer(l_pa_zy_mu, (-1, self.sym_samples, 1, n_a))
         self.l_pa_logvar = ReshapeLayer(l_pa_zy_logvar, (-1, self.sym_samples, 1, n_a))
 
-        # Here we assume that we pass (batch size * segment length, number of features) to the sample layer
+        # Here we assume that we pass (batch size * segment length, number of features) to the sample layer from
+        # which we then get (batch size * segment length, samples, IW samples, features)
         self.l_px = ReshapeLayer(l_px_azy, (-1, n_l, self.sym_samples, 1, n_c))
         self.l_px_mu = ReshapeLayer(l_px_zy_mu, (-1, n_l, self.sym_samples, 1, n_c)) \
             if x_dist == "gaussian" else None
@@ -253,13 +254,13 @@ class CSDGM(Model):
         self.f_pa = theano.function([self.sym_z, self.sym_t_l, self.sym_samples], outputs)
 
         inputs = {l_x_in: self.sym_x_l, l_qa_x: self.sym_a, l_qz_axy: self.sym_z, l_y_in: self.sym_t_l}
-        outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(1, 2))
+        outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(2, 3))
         self.f_px = theano.function([self.sym_x_l, self.sym_a, self.sym_z, self.sym_t_l, self.sym_samples], outputs)
 
-        outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(1, 2))
+        outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(2, 3))
         self.f_mu = theano.function([self.sym_x_l, self.sym_a, self.sym_z, self.sym_t_l, self.sym_samples], outputs)
 
-        outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(1, 2))
+        outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(2, 3))
         self.f_var = theano.function([self.sym_x_l, self.sym_a, self.sym_z, self.sym_t_l, self.sym_samples], outputs)
 
         # Define model parameters
@@ -291,7 +292,7 @@ class CSDGM(Model):
         l_log_pz = StandardNormalLogDensityLayer(self.l_qz)
         l_log_pa = GaussianLogDensityLayer(self.l_qa, self.l_pa_mu, self.l_pa_logvar)
 
-        l_x_in = ReshapeLayer(self.l_x_in, (-1, self.n_c))
+        l_x_in = ReshapeLayer(self.l_x_in, (-1, self.n_l*self.n_c))
         l_px = DimshuffleLayer(self.l_px, (0, 3, 1, 2, 4))
         l_px = ReshapeLayer(l_px, (-1, self.sym_samples, 1, self.n_c))
         if self.x_dist == 'bernoulli':
@@ -301,9 +302,8 @@ class CSDGM(Model):
             l_log_px = ReshapeLayer(l_log_px, (-1, self.n_l, 1, 1, 1))
             l_log_px = MeanLayer(l_log_px, axis=1)
         elif self.x_dist == 'gaussian':
-            l_px_mu = ReshapeLayer(self.l_px_mu, (-1, self.sym_samples, 1, self.n_l * self.n_c))
-            l_px_logvar = ReshapeLayer(self.l_px_logvar, (-1, self.sym_samples, 1, self.n_l * self.n_c))
-            l_x_in = ReshapeLayer(self.l_x_in, (-1, self.n_l*self.n_c))
+            l_px_mu = ReshapeLayer(DimshuffleLayer(self.l_px_mu, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.n_l * self.n_c))
+            l_px_logvar = ReshapeLayer(DimshuffleLayer(self.l_px_logvar, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.n_l * self.n_c))
             l_log_px = GaussianLogDensityLayer(l_x_in, l_px_mu, l_px_logvar)
 
         def lower_bound(log_pa, log_qa, log_pz, log_qz, log_py, log_px):
