@@ -117,7 +117,7 @@ def run_cvae():
             pa = model.f_pa(qz, test_y, 1)
             px = model.f_px(test_act, pa, qz, test_y, 1)
             px_mu = model.f_mu(test_act, pa, qz, test_y, 1)
-            px_var = model.f_var(test_act, pa, qz, test_y, 1)
+            px_var = np.exp(model.f_var(test_act, pa, qz, test_y, 1))
 
             z_ = np.concatenate((z_, qz))
             y_ = np.concatenate((y_, np.ones((len(test_act), ))*y_l))
