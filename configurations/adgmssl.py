@@ -5,7 +5,7 @@ from sklearn.metrics import confusion_matrix
 
 from data_preparation.load_data import LoadHAR
 from lasagne_extensions.nonlinearities import rectify
-from models import ADGMSSL
+from models.adgm import ADGM
 from training.train import TrainModel
 from utils.har_utils import one_hot
 
@@ -64,7 +64,7 @@ def run_adgmssl():
     n_batches = n//bs
 
     # Initialize the auxiliary deep generative model.
-    model = ADGMSSL(n_x=n_x, n_a=100, n_z=100, n_y=n_classes, a_hidden=[500, 500],
+    model = ADGM(n_x=n_x, n_a=100, n_z=100, n_y=n_classes, a_hidden=[500, 500],
                     z_hidden=[500, 500], xhat_hidden=[500, 500], y_hidden=[500, 500],
                     trans_func=rectify, batchnorm=False, x_dist='gaussian')
 
