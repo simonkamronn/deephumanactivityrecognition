@@ -72,6 +72,7 @@ class CSDGM(Model):
         self.sym_samples = T.iscalar('samples')  # MC samples
         self.sym_z = T.matrix('z')  # latent variable z
         self.sym_a = T.matrix('a')  # auxiliary variable a
+        self.sym_warmup = T.fscalar('warmup')  # warmup to scale KL term
 
         # Assist methods for collecting the layers
         def dense_layer(layer_in, n, dist_w=init.GlorotNormal, dist_b=init.Normal):
@@ -174,6 +175,9 @@ class CSDGM(Model):
             l_px_azy = BatchNormLayer(l_px_azy)
         l_px_azy = NonlinearityLayer(l_px_azy, self.transf)
 
+        # Note that px_hid[0] has to be equal to the number filters in the first convolution. Otherwise add a
+        # dense layers here.
+
         # Inverse pooling
         l_global_depool = InverseLayer(l_px_azy, l_global_pool_enc)
         print("l_global_depool", l_global_depool.output_shape)
@@ -233,21 +237,30 @@ class CSDGM(Model):
             if x_dist == "gaussian" else None
 
         # Predefined functions
-        inputs = [self.sym_x_l, self.sym_samples]
-        outputs = get_output(self.l_qy, self.sym_x_l, deterministic=True).mean(axis=(1, 2))
-        self.f_qy = theano.function(inputs, outputs)
+        inputs = {l_x_in: self.sym_x_l}
+        outputs = get_output(l_qy_xa, inputs, deterministic=True)
+        self.f_qy = theano.function([self.sym_x_l, self.sym_samples], outputs)
 
-        inputs = [self.sym_x_l, self.sym_samples]
-        outputs = get_output(self.l_qa, self.sym_x_l, deterministic=True).mean(axis=(1, 2))
-        self.f_qa = theano.function(inputs, outputs)
+        inputs = {l_x_in: self.sym_x_l, l_y_in: self.sym_t_l}
+        outputs = get_output(l_qz_axy, inputs, deterministic=True)
+        self.f_qz = theano.function([self.sym_x_l, self.sym_t_l, self.sym_samples], outputs)
+
+        outputs = get_output(l_qa_x, inputs, deterministic=True)
+        self.f_qa = theano.function([self.sym_x_l, self.sym_samples], outputs)
 
         inputs = {l_qz_axy: self.sym_z, l_y_in: self.sym_t_l}
-        outputs = get_output(self.l_pa, inputs, deterministic=True)
+        outputs = get_output(l_pa_zy, inputs, deterministic=True)
         self.f_pa = theano.function([self.sym_z, self.sym_t_l, self.sym_samples], outputs)
 
         inputs = {l_x_in: self.sym_x_l, l_qa_x: self.sym_a, l_qz_axy: self.sym_z, l_y_in: self.sym_t_l}
         outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(1, 2))
         self.f_px = theano.function([self.sym_x_l, self.sym_a, self.sym_z, self.sym_t_l, self.sym_samples], outputs)
+
+        outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(1, 2))
+        self.f_mu = theano.function([self.sym_x_l, self.sym_a, self.sym_z, self.sym_t_l, self.sym_samples], outputs)
+
+        outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(1, 2))
+        self.f_var = theano.function([self.sym_x_l, self.sym_a, self.sym_z, self.sym_t_l, self.sym_samples], outputs)
 
         # Define model parameters
         self.model_params = get_all_params([self.l_qy, self.l_pa, self.l_px])
@@ -294,7 +307,7 @@ class CSDGM(Model):
             l_log_px = GaussianLogDensityLayer(l_x_in, l_px_mu, l_px_logvar)
 
         def lower_bound(log_pa, log_qa, log_pz, log_qz, log_py, log_px):
-            lb = log_px + log_py + log_pz + log_pa - log_qa - log_qz
+            lb = log_px + log_py + (log_pz + log_pa - log_qa - log_qz)*(1. - self.sym_warmup - 0.1)
             return lb
 
         # Lower bound for labeled data
@@ -334,6 +347,7 @@ class CSDGM(Model):
         inputs = {self.l_x_in: x_u, self.l_y_in: t_u, self.l_a_in: a_x_u_rep}
         out = get_output(out_layers, inputs, batch_norm_update_averages=False, batch_norm_use_averages=False)
         log_pa_u, log_pz_u, log_qa_x_u, log_qz_axy_u, log_px_zy_u = out
+
         # Prior p(y) expecting that all classes are evenly distributed
         py_u = softmax(T.zeros((bs_u * self.n_y, self.n_y)))
         log_py_u = -categorical_crossentropy(py_u, t_u).reshape((-1, 1)).dimshuffle((0, 'x', 'x', 1))
@@ -386,7 +400,7 @@ class CSDGM(Model):
                   self.sym_x_u: x_batch_u,
                   self.sym_t_l: t_batch_l}
         inputs = [self.sym_index, self.sym_batchsize, self.sym_bs_l, self.sym_beta,
-                  self.sym_lr, sym_beta1, sym_beta2, self.sym_samples]
+                  self.sym_lr, sym_beta1, sym_beta2, self.sym_samples, self.sym_warmup]
         outputs = [elbo, lb_labeled, lb_unlabeled, log_px]
         f_train = theano.function(inputs=inputs, outputs=outputs, givens=givens, updates=updates)
 

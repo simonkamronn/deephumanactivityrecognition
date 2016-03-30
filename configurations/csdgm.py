@@ -99,7 +99,7 @@ def run_cvae():
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
     train_args['inputs']['samples'] = 1
-    # train_args['inputs']['warmup'] = .5
+    train_args['inputs']['warmup'] = .5
 
     def custom_evaluation(model, path):
         plt.clf()
@@ -109,47 +109,51 @@ def run_cvae():
         for idx, y_l in enumerate(np.unique(y)):
             act_idx = test_set[1] == y_l
             test_act = test_set[0][act_idx[:, 0]]
+            test_y = test_set[1][act_idx[:, 0]]
 
-            z = model.f_qz(test_act, 1)
-            z_ = np.concatenate((z_, z))
+            # qy = model.f_qy(test_act, 1)
+            # qa = model.f_qa(test_act, 1)
+            qz = model.f_qz(test_act, test_y, 1)
+            pa = model.f_pa(qz, test_y, 1)
+            px = model.f_px(test_act, pa, qz, test_y, 1)
+            px_mu = model.f_mu(test_act, pa, qz, test_y, 1)
+            px_var = model.f_var(test_act, pa, qz, test_y, 1)
+
+            z_ = np.concatenate((z_, qz))
             y_ = np.concatenate((y_, np.ones((len(test_act), ))*y_l))
 
-            xhat = model.f_px(z, 1)
-            mu = model.f_mu(z, 1)
-            var = np.exp(model.f_var(z, 1))
-
-            axarr[idx, 0].plot(test_act[:2].reshape(-1, dim_features), color='red')
-            axarr[idx, 0].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted')
-
-            axarr[idx, 1].plot(mu[:2].reshape(-1, dim_features), label="mu")
-            axarr[idx, 1].plot(var[:2].reshape(-1, dim_features), label="var")
+            axarr[idx, 0].plot(test_act[:2].reshape(-1, n_c))
+            axarr[idx, 0].plot(px[:2].reshape(-1, n_c), linestyle='dotted')
+            axarr[idx, 1].plot(px_mu[:2].reshape(-1, n_c), label="mu")
+            axarr[idx, 1].plot(px_var[:2].reshape(-1, n_c), label="var")
             plt.legend()
 
-        f.set_size_inches(12, 10)
+        f.set_size_inches(12, 8)
         f.savefig(path, dpi=100, format='png')
         plt.close(f)
 
-        # Plot PCA decomp of Z
-        z_pca = PCA(n_components=2).fit_transform(z_)
-        plt.clf()
-        plt.figure()
-        for c, i in zip(['r', 'b'], set(y_unique)):
-            plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=c, alpha=0.8)
-        plt.legend()
-        plt.title('PCA of Z')
-        plt.savefig(path.replace('custom_eval_plot', 'pca/z'))
-        plt.close()
+        # # Plot PCA decomp of Z
+        # z_pca = PCA(n_components=2).fit_transform(z_)
+        # plt.clf()
+        # plt.figure()
+        # for c, i in zip(['r', 'b'], set(y_unique)):
+        #     plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=c, alpha=0.8)
+        # plt.legend()
+        # plt.title('PCA of Z')
+        # plt.savefig(path.replace('custom_eval_plot', 'pca/z'))
+        # plt.close()
 
     # Define training loop. Output training evaluations every 1 epoch
     # and the custom evaluation method every 10 epochs.
-    train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=10, f_custom_eval=None)
+    train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=10, f_custom_eval=custom_evaluation)
     train.add_initial_training_notes("Training the rae with bn %s. seed %i." % (str(model.batchnorm), seed))
     train.train_model(f_train, train_args,
                       f_test, test_args,
                       f_validate, validate_args,
                       n_train_batches=n_batches,
                       n_epochs=1000,
-                      anneal=[("learningrate", 100, 0.75, 3e-5)])
+                      anneal=[("learningrate", 100, 0.75, 3e-5),
+                              ("warmup", 5, 0.99, 0.1)])
 
     # image_to_movie.create(model.get_root_path() + '/training_custom_evals/', rate=3)
 
