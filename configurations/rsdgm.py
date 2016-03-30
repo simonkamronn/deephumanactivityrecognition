@@ -94,7 +94,7 @@ def run_cvae():
     # Update the default function arguments.
     train_args['inputs']['batchsize_unlabeled'] = bs
     train_args['inputs']['batchsize_labeled'] = n_samples
-    train_args['inputs']['beta'] = .2
+    train_args['inputs']['beta'] = .1
     train_args['inputs']['learningrate'] = 3e-4
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999

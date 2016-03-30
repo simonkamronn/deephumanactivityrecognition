@@ -32,7 +32,7 @@ class CSDGM(Model):
         inference model Q q(a|x) and q(z|a,x,y).
         Weights are initialized using the Bengio and Glorot (2010) initialization scheme.
         :param n_c: Number of input channels.
-        :param n_l: Number of lengts.
+        :param n_l: Number of lengths.
         :param n_a: Number of auxiliary.
         :param n_z: Number of latent.
         :param n_y: Number of classes.
@@ -199,16 +199,16 @@ class CSDGM(Model):
         print("l_dec", l_px_azy.output_shape)
 
         # Flatten first two dimensions
-        l_px_azy = ReshapeLayer(l_px_azy, (-1, n_l*n_c))
+        l_px_azy = ReshapeLayer(l_px_azy, (-1, n_c))
 
         if x_dist == 'bernoulli':
-            l_px_azy = DenseLayer(l_px_azy, n_l*n_c, init.GlorotNormal(), init.Normal(init_w), sigmoid)
+            l_px_azy = DenseLayer(l_px_azy, n_c, init.GlorotNormal(), init.Normal(init_w), sigmoid)
         elif x_dist == 'multinomial':
-            l_px_azy = DenseLayer(l_px_azy, n_l*n_c, init.GlorotNormal(), init.Normal(init_w), softmax)
+            l_px_azy = DenseLayer(l_px_azy, n_c, init.GlorotNormal(), init.Normal(init_w), softmax)
         elif x_dist == 'gaussian':
-            l_px_azy, l_px_zy_mu, l_px_zy_logvar = stochastic_layer(l_px_azy, n_l*n_c, self.sym_samples, px_nonlinearity)
+            l_px_azy, l_px_zy_mu, l_px_zy_logvar = stochastic_layer(l_px_azy, n_c, self.sym_samples, px_nonlinearity)
         elif x_dist == 'linear':
-            l_px_azy = DenseLayer(l_px_azy, n_l*n_c, nonlinearity=None)
+            l_px_azy = DenseLayer(l_px_azy, n_c, nonlinearity=None)
 
         # Reshape all the model layers to have the same size
         self.l_x_in = l_x_in
@@ -229,11 +229,11 @@ class CSDGM(Model):
         self.l_pa_mu = ReshapeLayer(l_pa_zy_mu, (-1, self.sym_samples, 1, n_a))
         self.l_pa_logvar = ReshapeLayer(l_pa_zy_logvar, (-1, self.sym_samples, 1, n_a))
 
-        # Here we assume that we pass (batch size, segment length * number of features) to the sample layer
-        self.l_px = ReshapeLayer(l_px_azy, (-1, self.sym_samples, 1, n_l, n_c))
-        self.l_px_mu = ReshapeLayer(l_px_zy_mu, (-1, self.sym_samples, 1, n_l, n_c)) \
+        # Here we assume that we pass (batch size * segment length, number of features) to the sample layer
+        self.l_px = ReshapeLayer(l_px_azy, (-1, n_l, self.sym_samples, 1, n_c))
+        self.l_px_mu = ReshapeLayer(l_px_zy_mu, (-1, n_l, self.sym_samples, 1, n_c)) \
             if x_dist == "gaussian" else None
-        self.l_px_logvar = ReshapeLayer(l_px_zy_logvar, (-1, self.sym_samples, 1, n_l, n_c)) \
+        self.l_px_logvar = ReshapeLayer(l_px_zy_logvar, (-1, n_l, self.sym_samples, 1, n_c)) \
             if x_dist == "gaussian" else None
 
         # Predefined functions
@@ -241,15 +241,15 @@ class CSDGM(Model):
         outputs = get_output(self.l_qy, inputs, deterministic=True).mean(axis=(1, 2))
         self.f_qy = theano.function([self.sym_x_l, self.sym_samples], outputs)
 
+        outputs = get_output(l_qa_x, inputs, deterministic=True)
+        self.f_qa = theano.function([self.sym_x_l, self.sym_samples], outputs)
+
         inputs = {l_x_in: self.sym_x_l, l_y_in: self.sym_t_l}
         outputs = get_output(l_qz_axy, inputs, deterministic=True)
         self.f_qz = theano.function([self.sym_x_l, self.sym_t_l, self.sym_samples], outputs)
 
-        outputs = get_output(self.l_qa, inputs, deterministic=True).mean(axis=(1, 2))
-        self.f_qa = theano.function([self.sym_x_l, self.sym_samples], outputs)
-
         inputs = {l_qz_axy: self.sym_z, l_y_in: self.sym_t_l}
-        outputs = get_output(l_pa_zy, inputs, deterministic=True)
+        outputs = get_output(self.l_pa, inputs, deterministic=True).mean(axis=(1, 2))
         self.f_pa = theano.function([self.sym_z, self.sym_t_l, self.sym_samples], outputs)
 
         inputs = {l_x_in: self.sym_x_l, l_qa_x: self.sym_a, l_qz_axy: self.sym_z, l_y_in: self.sym_t_l}

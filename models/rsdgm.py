@@ -21,8 +21,8 @@ class RSDGM(Model):
     The :class:'RSDGM' ...
     """
 
-    def __init__(self, n_x, n_a, n_z, n_y, qa_hid, qz_hid, qy_hid, px_hid, pa_hid, enc_rnn=256, dec_rnn=256,
-                 max_seq_length=28, nonlinearity=rectify, px_nonlinearity=None, x_dist='bernoulli',
+    def __init__(self, n_c, n_a, n_z, n_y, qa_hid, qz_hid, qy_hid, px_hid, pa_hid, enc_rnn=256, dec_rnn=256,
+                 n_l=28, nonlinearity=rectify, px_nonlinearity=None, x_dist='bernoulli',
                  batchnorm=False, seed=1234):
         """
         Initialize an skip deep generative model consisting of
@@ -30,7 +30,7 @@ class RSDGM(Model):
         generative model P p(a|z,y) and p(x|a,z,y),
         inference model Q q(a|x) and q(z|a,x,y).
         Weights are initialized using the Bengio and Glorot (2010) initialization scheme.
-        :param n_x: Number of inputs.
+        :param n_c: Number of inputs.
         :param n_a: Number of auxiliary.
         :param n_z: Number of latent.
         :param n_y: Number of classes.
@@ -43,13 +43,13 @@ class RSDGM(Model):
         :param batchnorm: Boolean value for batch normalization.
         :param seed: The random seed.
         """
-        super(RSDGM, self).__init__(n_x, qz_hid + px_hid, n_a + n_z, nonlinearity)
+        super(RSDGM, self).__init__(n_c, qz_hid + px_hid, n_a + n_z, nonlinearity)
         self.x_dist = x_dist
         self.n_y = n_y
-        self.n_x = n_x
+        self.n_c = n_c
         self.n_a = n_a
         self.n_z = n_z
-        self.max_seq_length = max_seq_length
+        self.n_l = n_l
         self.batchnorm = batchnorm
         self._srng = RandomStreams(seed)
 
@@ -88,26 +88,24 @@ class RSDGM(Model):
             outgate=Gate(W_in=init.Uniform(0.01), W_hid=init.Uniform(0.01), b=init.Constant(0.0))
 
             lstm = LSTMLayer(input, num_units=nunits, backwards=backwards,
-                                            peepholes=False,
-                                            ingate=ingate,
-                                            forgetgate=forgetgate,
-                                            cell=cell,
-                                            outgate=outgate,
-                                            name=name,
-                                            only_return_final=return_final
-                                            )
+                             peepholes=False,
+                             ingate=ingate,
+                             forgetgate=forgetgate,
+                             cell=cell,
+                             outgate=outgate,
+                             name=name,
+                             only_return_final=return_final)
 
             rec = RecurrentLayer(input, nunits,
                                    W_in_to_hid=init.GlorotNormal('relu'),
                                    W_hid_to_hid=init.GlorotNormal('relu'), backwards=backwards,
                                    nonlinearity=rectify, only_return_final=return_final, name=name)
-
-            return rec
+            return lstm
 
 
         # Input layers
         l_y_in = InputLayer((None, n_y))
-        l_x_in = InputLayer((None, None, n_x))
+        l_x_in = InputLayer((None, n_l, n_c))
 
         # RNN encoder implementation
         l_enc_forward = lstm_layer(l_x_in, enc_rnn, return_final=True, backwards=False, name='enc_forward')
@@ -178,7 +176,7 @@ class RSDGM(Model):
         l_px_azy = NonlinearityLayer(l_px_azy, self.transf)
 
         # RNN decoder implementation
-        l_px_azy_repeat = RepeatLayer(l_px_azy, n=max_seq_length)
+        l_px_azy_repeat = RepeatLayer(l_px_azy, n=n_l)
         l_dec_forward = lstm_layer(l_px_azy_repeat, dec_rnn, return_final=False, backwards=False, name='dec_forward')
         l_dec_backward = lstm_layer(l_px_azy_repeat, dec_rnn, return_final=False, backwards=True, name='dec_backward')
         l_dec_concat = ConcatLayer([l_dec_forward, l_dec_backward], axis=-1)
@@ -191,15 +189,15 @@ class RSDGM(Model):
                 l_px_azy = dense_layer(l_px_azy, hid)
 
         if x_dist == 'bernoulli':
-            l_px_azy = DenseLayer(l_px_azy, n_x, init.GlorotNormal(), init.Normal(init_w), sigmoid)
+            l_px_azy = DenseLayer(l_px_azy, n_c, init.GlorotNormal(), init.Normal(init_w), sigmoid)
         elif x_dist == 'multinomial':
-            l_px_azy = DenseLayer(l_px_azy, n_x, init.GlorotNormal(), init.Normal(init_w), softmax)
+            l_px_azy = DenseLayer(l_px_azy, n_c, init.GlorotNormal(), init.Normal(init_w), softmax)
         elif x_dist == 'gaussian':
-            l_px_azy, l_px_zy_mu, l_px_zy_logvar = stochastic_layer(l_px_azy, n_x, 1, px_nonlinearity)
+            l_px_azy, l_px_zy_mu, l_px_zy_logvar = stochastic_layer(l_px_azy, n_c, 1, px_nonlinearity)
 
-        l_px_zy_mu = ReshapeLayer(l_px_zy_mu, (-1, max_seq_length, n_x))
-        l_px_zy_logvar = ReshapeLayer(l_px_zy_logvar, (-1, max_seq_length, n_x))
-        l_px_azy = ReshapeLayer(l_px_azy, (-1, max_seq_length, n_x))
+        l_px_zy_mu = ReshapeLayer(l_px_zy_mu, (-1, n_l, n_c))
+        l_px_zy_logvar = ReshapeLayer(l_px_zy_logvar, (-1, n_l, n_c))
+        l_px_azy = ReshapeLayer(l_px_azy, (-1, n_l, n_c))
 
         # Reshape all the model layers to have the same size
         self.l_x_in = l_x_in
@@ -220,10 +218,10 @@ class RSDGM(Model):
         self.l_pa_mu = ReshapeLayer(l_pa_zy_mu, (-1, self.sym_samples, 1, n_a))
         self.l_pa_logvar = ReshapeLayer(l_pa_zy_logvar, (-1, self.sym_samples, 1, n_a))
 
-        self.l_px = ReshapeLayer(l_px_azy, (-1,  max_seq_length, self.sym_samples, 1, n_x))
-        self.l_px_mu = ReshapeLayer(l_px_zy_mu, (-1, max_seq_length, self.sym_samples, 1, n_x)) if x_dist == "gaussian" else None
+        self.l_px = ReshapeLayer(l_px_azy, (-1, n_l, self.sym_samples, 1, n_c))
+        self.l_px_mu = ReshapeLayer(l_px_zy_mu, (-1, n_l, self.sym_samples, 1, n_c)) if x_dist == "gaussian" else None
         self.l_px_logvar = ReshapeLayer(l_px_zy_logvar,
-                                        (-1, max_seq_length, self.sym_samples, 1, n_x)) if x_dist == "gaussian" else None
+                                        (-1, n_l, self.sym_samples, 1, n_c)) if x_dist == "gaussian" else None
 
         # Predefined functions
         inputs = [self.sym_x_l, self.sym_samples]
@@ -271,16 +269,16 @@ class RSDGM(Model):
         l_log_pz = StandardNormalLogDensityLayer(self.l_qz)
         l_log_pa = GaussianLogDensityLayer(self.l_qa, self.l_pa_mu, self.l_pa_logvar)
 
-        l_x_in = ReshapeLayer(self.l_x_in, (-1, self.max_seq_length * self.n_x))
+        l_x_in = ReshapeLayer(self.l_x_in, (-1, self.n_l * self.n_c))
         if self.x_dist == 'bernoulli':
-            l_px = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.max_seq_length * self.n_x))
+            l_px = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.n_l * self.n_c))
             l_log_px = BernoulliLogDensityLayer(l_px, l_x_in)
         elif self.x_dist == 'multinomial':
-            l_px = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.max_seq_length * self.n_x))
+            l_px = ReshapeLayer(DimshuffleLayer(self.l_px, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.n_l * self.n_c))
             l_log_px = MultinomialLogDensityLayer(l_px, l_x_in)
         elif self.x_dist == 'gaussian':
-            l_px_mu = ReshapeLayer(DimshuffleLayer(self.l_px_mu, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.max_seq_length * self.n_x))
-            l_px_logvar = ReshapeLayer(DimshuffleLayer(self.l_px_logvar, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.max_seq_length * self.n_x))
+            l_px_mu = ReshapeLayer(DimshuffleLayer(self.l_px_mu, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.n_l * self.n_c))
+            l_px_logvar = ReshapeLayer(DimshuffleLayer(self.l_px_logvar, (0, 2, 3, 1, 4)), (-1, self.sym_samples, 1, self.n_l * self.n_c))
             l_log_px = GaussianLogDensityLayer(l_x_in, l_px_mu, l_px_logvar)
 
         def lower_bound(log_pa, log_qa, log_pz, log_qz, log_py, log_px):
@@ -314,7 +312,7 @@ class RSDGM(Model):
         #   [x[1,0], x[1,1], ..., x[1,n_x]]]         [0, 0, 1]]
         t_eye = T.eye(self.n_y, k=0)
         t_u = t_eye.reshape((self.n_y, 1, self.n_y)).repeat(bs_u, axis=1).reshape((-1, self.n_y))
-        x_u = self.sym_x_u.reshape((1, bs_u, self.max_seq_length, self.n_x)).repeat(self.n_y, axis=0).reshape((-1, self.max_seq_length, self.n_x))
+        x_u = self.sym_x_u.reshape((1, bs_u, self.n_l, self.n_c)).repeat(self.n_y, axis=0).reshape((-1, self.n_l, self.n_c))
 
         # Since the expectation of var a is outside the integration we calculate E_q(a|x) first
         a_x_u = get_output(self.l_qa, self.sym_x_u, batch_norm_update_averages=True, batch_norm_use_averages=False)
