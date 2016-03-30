@@ -419,9 +419,9 @@ class CSDGM(Model):
             givens = {self.sym_x_l: self.sh_valid_x,
                       self.sym_t_l: self.sh_valid_t}
             f_validate = theano.function(inputs=[self.sym_samples], outputs=[class_err], givens=givens)
-        # Default validation args. Note that these can be changed during or prior to training.
-        self.validate_args['inputs']['samples'] = 1
-        self.validate_args['outputs']['validation'] = '%0.2f%%'
+            # Default validation args. Note that these can be changed during or prior to training.
+            self.validate_args['inputs']['samples'] = 1
+            self.validate_args['outputs']['validation'] = '%0.2f%%'
 
         return f_train, f_test, f_validate, self.train_args, self.test_args, self.validate_args
 
