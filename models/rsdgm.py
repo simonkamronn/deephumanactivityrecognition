@@ -400,14 +400,14 @@ class RSDGM(Model):
         self.train_args['inputs']['beta2'] = 0.999
         self.train_args['inputs']['samples'] = 1
         self.train_args['inputs']['warmup'] = 0.1
-        self.train_args['outputs']['lb'] = '%0.2f'
-        self.train_args['outputs']['lb-l'] = '%0.2f'
-        self.train_args['outputs']['lb-u'] = '%0.2f'
-        self.train_args['outputs']['px'] = '%0.2f'
-        self.train_args['outputs']['pz'] = '%0.2f'
-        self.train_args['outputs']['qz'] = '%0.2f'
-        self.train_args['outputs']['pa'] = '%0.2f'
-        self.train_args['outputs']['qa'] = '%0.2f'
+        self.train_args['outputs']['lb'] = '%0.3f'
+        self.train_args['outputs']['lb-l'] = '%0.3f'
+        self.train_args['outputs']['lb-u'] = '%0.3f'
+        self.train_args['outputs']['px'] = '%0.3f'
+        self.train_args['outputs']['pz'] = '%0.3f'
+        self.train_args['outputs']['qz'] = '%0.3f'
+        self.train_args['outputs']['pa'] = '%0.3f'
+        self.train_args['outputs']['qa'] = '%0.3f'
 
         # Validation and test function
         y = get_output(self.l_qy, self.sym_x_l, deterministic=True).mean(axis=(1, 2))

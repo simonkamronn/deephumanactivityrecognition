@@ -260,10 +260,10 @@ class RVAE(Model):
         self.train_args['inputs']['beta2'] = 0.999
         self.train_args['inputs']['samples'] = 1
         self.train_args['inputs']['warmup'] = 0.1
-        self.train_args['outputs']['log p(x)'] = '%0.6f'
-        self.train_args['outputs']['log p(z)'] = '%0.6f'
-        self.train_args['outputs']['log q(z)'] = '%0.6f'
-        self.train_args['outputs']['elbo train'] = '%0.6f'
+        self.train_args['outputs']['px'] = '%0.4f'
+        self.train_args['outputs']['pz'] = '%0.4f'
+        self.train_args['outputs']['qz'] = '%0.4f'
+        self.train_args['outputs']['lb train'] = '%0.4f'
         self.train_args['outputs']['warmup'] = '%0.3f'
 
         # Validation and test function
@@ -273,7 +273,7 @@ class RVAE(Model):
         # Test args.  Note that these can be changed during or prior to training.
         self.test_args['inputs']['samples'] = 1
         self.test_args['inputs']['warmup'] = 0.1
-        self.test_args['outputs']['elbo test'] = '%0.6f'
+        self.test_args['outputs']['lb test'] = '%0.4f'
 
         f_validate = None
         if validation_set is not None:
