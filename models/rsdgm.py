@@ -406,13 +406,11 @@ class RSDGM(Model):
         class_err = (1. - categorical_accuracy(y, self.sym_t_l).mean()) * 100
         givens = {self.sym_x_l: self.sh_test_x,
                   self.sym_t_l: self.sh_test_t}
-        f_test = theano.function(inputs=[self.sym_samples, self.sym_warmup], outputs=[class_err, elbo], givens=givens)
+        f_test = theano.function(inputs=[self.sym_samples], outputs=[class_err], givens=givens)
 
         # Test args.  Note that these can be changed during or prior to training.
         self.test_args['inputs']['samples'] = 1
-        self.test_args['inputs']['warmup'] = 0.1
         self.test_args['outputs']['test'] = '%0.2f%%'
-        self.test_args['outputs']['lb'] = '%0.4f%%'
 
         f_validate = None
         if validation_set is not None:
