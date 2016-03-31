@@ -52,12 +52,10 @@ def run_cvae():
 
     y_unique = np.unique(y)
     y = one_hot(y, len(y_unique))
-
-    dim_samples, dim_sequence, dim_features = X.shape
     num_classes = len(y_unique)
 
     # Split into train and test stratified by users
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1000, stratify=users)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=500, stratify=users)
 
     n_samples = 100
     # Split training into labelled and unlabelled. Optionally stratified by the label
@@ -94,7 +92,7 @@ def run_cvae():
     # Update the default function arguments.
     train_args['inputs']['batchsize_unlabeled'] = bs
     train_args['inputs']['batchsize_labeled'] = n_samples
-    train_args['inputs']['beta'] = .5
+    train_args['inputs']['beta'] = .05
     train_args['inputs']['learningrate'] = 3e-4
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
@@ -108,8 +106,8 @@ def run_cvae():
         y_ = np.empty((0, ))
         for idx, y_l in enumerate(np.unique(y)):
             act_idx = test_set[1] == y_l
-            test_act = test_set[0][act_idx[:, 0]]
-            test_y = test_set[1][act_idx[:, 0]]
+            test_act = test_set[0][act_idx[:2, 0]]
+            test_y = test_set[1][act_idx[:2, 0]]
 
             # qy = model.f_qy(test_act, 1)
             qa = model.f_qa(test_act, 1)
@@ -122,10 +120,10 @@ def run_cvae():
             z_ = np.concatenate((z_, qz))
             y_ = np.concatenate((y_, np.ones((len(test_act), ))*y_l))
 
-            axarr[idx, 0].plot(test_act[:2].reshape(-1, n_c))
-            axarr[idx, 0].plot(px[:2].reshape(-1, n_c), linestyle='dotted')
-            axarr[idx, 1].plot(px_mu[:2].reshape(-1, n_c), label="mu")
-            axarr[idx, 1].plot(px_var[:2].reshape(-1, n_c), label="var")
+            axarr[idx, 0].plot(test_act.reshape(-1, n_c))
+            axarr[idx, 0].plot(px.reshape(-1, n_c), linestyle='dotted')
+            axarr[idx, 1].plot(px_mu.reshape(-1, n_c), label="mu")
+            axarr[idx, 1].plot(px_var.reshape(-1, n_c), label="var")
             plt.legend()
 
         f.set_size_inches(12, 8)

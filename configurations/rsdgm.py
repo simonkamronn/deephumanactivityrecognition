@@ -16,49 +16,50 @@ from sklearn.decomposition import PCA
 def main():
     seed = np.random.randint(1, 2147462579)
 
-    # def sinus_seq(period, samples, length):
-    #     X = np.linspace(-np.pi*(samples/period), np.pi*(samples/period), samples)
-    #     X = np.reshape(np.sin(X), (-1, length, 1))
-    #     X += np.random.randn(*X.shape)*0.1
-    #     X = (X - np.min(X))/(np.max(X) - np.min(X))
-    #     return X, np.ones((samples/length, 1))
-    #
-    # X1, y1 = sinus_seq(40, 100000, 50)
-    # X2, y2 = sinus_seq(20, 40000, 50)
-    #
-    # X = np.concatenate((X1, X2)).astype('float32')
-    # y = np.concatenate((y1*0, y2*1), axis=0).astype('int')
-    #
-    # dim_samples, dim_sequence, dim_features = X.shape
-    # X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
+    def sinus_seq(period, samples, length):
+        X = np.linspace(-np.pi*(samples/period), np.pi*(samples/period), samples)
+        X = np.reshape(np.sin(X), (-1, length, 1))
+        X += np.random.randn(*X.shape)*0.1
+        X = (X - np.min(X))/(np.max(X) - np.min(X))
+        return X, np.ones((samples/length, 1))
 
-    # X, y, users, stats = har.load()
+    X1, y1 = sinus_seq(40, 100000, 50)
+    X2, y2 = sinus_seq(20, 40000, 50)
 
-    n_samples, step = 25, 25
-    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
-                        step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
-    X, y, name, users, stats = load_data.uci_hapt()
-
-    limited_labels = y < 5
-    y = y[limited_labels]
-    X = X[limited_labels].astype(np.float32)
-    users = users[limited_labels]
-
-    X -= X.mean(axis=0)
-
-    # Compress labels
-    for idx, label in enumerate(np.unique(y)):
-        if not np.equal(idx, label):
-            y[y == label] = idx
+    X = np.concatenate((X1, X2)).astype('float32')
+    y = np.concatenate((y1*0, y2*1), axis=0).astype('int')[:, 0]
 
     y_unique = np.unique(y)
     y = one_hot(y, len(y_unique))
-
-    dim_samples, dim_sequence, dim_features = X.shape
     num_classes = len(y_unique)
 
-    # Split into train and test stratified by users
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1000, stratify=users)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.9)
+
+    # X, y, users, stats = har.load()
+    #
+    # n_samples, step = 25, 25
+    # load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
+    #                     step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
+    # X, y, name, users, stats = load_data.uci_hapt()
+    #
+    # limited_labels = y < 5
+    # y = y[limited_labels]
+    # X = X[limited_labels].astype(np.float32)
+    # users = users[limited_labels]
+    #
+    # X -= X.mean(axis=0)
+    #
+    # # Compress labels
+    # for idx, label in enumerate(np.unique(y)):
+    #     if not np.equal(idx, label):
+    #         y[y == label] = idx
+    #
+    # y_unique = np.unique(y)
+    # y = one_hot(y, len(y_unique))
+    # num_classes = len(y_unique)
+    #
+    # # Split into train and test stratified by users
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1000, stratify=users)
 
     n_samples = 100
     # Split training into labelled and unlabelled. Optionally stratified by the label
@@ -90,7 +91,7 @@ def main():
     # Update the default function arguments.
     train_args['inputs']['batchsize_unlabeled'] = bs
     train_args['inputs']['batchsize_labeled'] = n_samples
-    train_args['inputs']['beta'] = .1
+    train_args['inputs']['beta'] = .05
     train_args['inputs']['learningrate'] = 3e-4
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
@@ -104,9 +105,8 @@ def main():
         y_ = np.empty((0, ))
         for idx, y_l in enumerate(np.unique(y)):
             act_idx = test_set[1] == y_l
-            rnd_idx = np.random.randint(0, len(act_idx), 2)
-            test_act = test_set[0][act_idx[rnd_idx, 0]]
-            test_y = test_set[1][act_idx[rnd_idx, 0]]
+            test_act = test_set[0][act_idx[:2, 0]]
+            test_y = test_set[1][act_idx[:2, 0]]
 
             # qy = model.f_qy(test_act, 1)
             qa = model.f_qa(test_act, 1)
@@ -119,10 +119,10 @@ def main():
             z_ = np.concatenate((z_, qz))
             y_ = np.concatenate((y_, np.ones((len(test_act), ))*y_l))
 
-            axarr[idx, 0].plot(test_act[:2].reshape(-1, n_c))
-            axarr[idx, 0].plot(px[:2].reshape(-1, n_c), linestyle='dotted')
-            axarr[idx, 1].plot(px_mu[:2].reshape(-1, n_c), label="mu")
-            axarr[idx, 1].plot(px_var[:2].reshape(-1, n_c), label="var")
+            axarr[idx, 0].plot(test_act.reshape(-1, n_c))
+            axarr[idx, 0].plot(px.reshape(-1, n_c), linestyle='dotted')
+            axarr[idx, 1].plot(px_mu.reshape(-1, n_c), label="mu")
+            axarr[idx, 1].plot(px_var.reshape(-1, n_c), label="var")
             plt.legend()
 
         f.set_size_inches(12, 8)
