@@ -360,6 +360,10 @@ class RSDGM(Model):
         lb_labeled = -lb_l.mean()
         lb_unlabeled = -lb_u.mean()
         log_px = log_px_zy_l.mean() + log_px_zy_u.mean()
+        log_pz = log_pz_l.mean() + log_pz_u.mean()
+        log_qz = log_qz_axy_l.mean() + log_qz_axy_u.mean()
+        log_pa = log_pa_l.mean() + log_pa_u.mean()
+        log_qa = log_qa_x_l.mean() + log_qa_x_u.mean()
 
         grads_collect = T.grad(elbo, self.trainable_model_params)
         params_collect = self.trainable_model_params
@@ -384,7 +388,7 @@ class RSDGM(Model):
                   self.sym_t_l: t_batch_l}
         inputs = [self.sym_index, self.sym_batchsize, self.sym_bs_l, self.sym_beta,
                   self.sym_lr, sym_beta1, sym_beta2, self.sym_samples, self.sym_warmup]
-        outputs = [elbo, lb_labeled, lb_unlabeled, log_px]
+        outputs = [elbo, lb_labeled, lb_unlabeled, log_px, log_pz, log_qz, log_pa, log_qa]
         f_train = theano.function(inputs=inputs, outputs=outputs, givens=givens, updates=updates)
 
         # Default training args. Note that these can be changed during or prior to training.
@@ -396,10 +400,14 @@ class RSDGM(Model):
         self.train_args['inputs']['beta2'] = 0.999
         self.train_args['inputs']['samples'] = 1
         self.train_args['inputs']['warmup'] = 0.1
-        self.train_args['outputs']['lb'] = '%0.4f'
-        self.train_args['outputs']['lb-labeled'] = '%0.4f'
-        self.train_args['outputs']['lb-unlabeled'] = '%0.4f'
-        self.train_args['outputs']['log p(x)'] = '%0.4f'
+        self.train_args['outputs']['lb'] = '%0.2f'
+        self.train_args['outputs']['lb-l'] = '%0.2f'
+        self.train_args['outputs']['lb-u'] = '%0.2f'
+        self.train_args['outputs']['px'] = '%0.2f'
+        self.train_args['outputs']['pz'] = '%0.2f'
+        self.train_args['outputs']['qz'] = '%0.2f'
+        self.train_args['outputs']['pa'] = '%0.2f'
+        self.train_args['outputs']['qa'] = '%0.2f'
 
         # Validation and test function
         y = get_output(self.l_qy, self.sym_x_l, deterministic=True).mean(axis=(1, 2))
