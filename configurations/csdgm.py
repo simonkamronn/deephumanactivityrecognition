@@ -1,4 +1,4 @@
-from os import path
+from os import makedirs
 from utils import copy_script, image_to_movie
 from training.train import TrainModel
 from lasagne_extensions.nonlinearities import rectify
@@ -87,6 +87,9 @@ def run_cvae():
     # Copy script to output folder
     copy_script(__file__, model)
 
+    # Create output path for PCA plot
+    makedirs(model.get_root_path() + '/training custom evals/pca')
+
     # Get the training functions.
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set_unlabeled, train_set_labeled, test_set)
     # Update the default function arguments.
@@ -100,46 +103,46 @@ def run_cvae():
     train_args['inputs']['warmup'] = 0.9
 
     def custom_evaluation(model, path):
+        # Get model output
+        x_ = test_set[0]
+        y_ = test_set[1]
+
+        # qy = model.f_qy(x_, 1)
+        qa = model.f_qa(x_, 1)
+        qz = model.f_qz(x_, y_, 1)
+        # pa = model.f_pa(qz, y_, 1)
+        px = model.f_px(qa, qz, y_, 1)
+        px_mu = model.f_mu(qa, qz, y_, 1)
+        px_var = np.exp(model.f_var(qa, qz, y_, 1))
+
+        # reduce y to integers
+        y_ = np.argmax(y_, axis=1)
+
         plt.clf()
-        f, axarr = plt.subplots(nrows=len(np.unique(y)), ncols=2)
-        z_ = np.empty((0, model.n_z))
-        y_ = np.empty((0, ))
-        for idx, y_l in enumerate(np.unique(y)):
-            act_idx = test_set[1] == y_l
-            test_act = test_set[0][act_idx[:, 0]][:2]
-            test_y = test_set[1][act_idx[:, 0]][:2]
+        f, axarr = plt.subplots(nrows=len(y_unique), ncols=2)
+        for idx, y_l in enumerate(y_unique):
+            l_idx = y_ == y_l
 
-            # qy = model.f_qy(test_act, 1)
-            qa = model.f_qa(test_act, 1)
-            qz = model.f_qz(test_act, test_y, 1)
-            # pa = model.f_pa(qz, test_y, 1)
-            px = model.f_px(test_act, qa, qz, test_y, 1)
-            px_mu = model.f_mu(test_act, qa, qz, test_y, 1)
-            px_var = np.exp(model.f_var(test_act, qa, qz, test_y, 1))
-
-            z_ = np.concatenate((z_, qz))
-            y_ = np.concatenate((y_, np.ones((len(test_act), ))*y_l))
-
-            axarr[idx, 0].plot(test_act.reshape(-1, n_c))
-            axarr[idx, 0].plot(px.reshape(-1, n_c), linestyle='dotted')
-            axarr[idx, 1].plot(px_mu.reshape(-1, n_c), label="mu")
-            axarr[idx, 1].plot(px_var.reshape(-1, n_c), label="var")
+            axarr[idx, 0].plot(x_[l_idx][:2].reshape(-1, n_c))
+            axarr[idx, 0].plot(px[l_idx][:2].reshape(-1, n_c), linestyle='dotted')
+            axarr[idx, 1].plot(px_mu[l_idx][:2].reshape(-1, n_c), label="mu")
+            axarr[idx, 1].plot(px_var[l_idx][:2].reshape(-1, n_c), label="var")
             plt.legend()
 
         f.set_size_inches(12, 8)
         f.savefig(path, dpi=100, format='png')
         plt.close(f)
 
-        # # Plot PCA decomp of Z
-        # z_pca = PCA(n_components=2).fit_transform(z_)
-        # plt.clf()
-        # plt.figure()
-        # for c, i in zip(['r', 'b'], set(y_unique)):
-        #     plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=c, alpha=0.8)
-        # plt.legend()
-        # plt.title('PCA of Z')
-        # plt.savefig(path.replace('custom_eval_plot', 'pca/z'))
-        # plt.close()
+        # Plot PCA decomp
+        z_pca = PCA(n_components=2).fit_transform(qa)
+        plt.clf()
+        plt.figure()
+        for i in set(y_unique):
+            plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], alpha=0.8)
+        plt.legend()
+        plt.title('PCA of A')
+        plt.savefig(path.replace('custom_eval_plot', 'pca/z'))
+        plt.close()
 
     # Define training loop. Output training evaluations every 1 epoch
     # and the custom evaluation method every 10 epochs.

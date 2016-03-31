@@ -115,11 +115,13 @@ def main():
         px_mu = model.f_mu(qa, qz, y_, 1)
         px_var = np.exp(model.f_var(qa, qz, y_, 1))
 
+        # reduce y to integers
+        y_ = np.argmax(y_, axis=1)
+
         plt.clf()
         f, axarr = plt.subplots(nrows=len(y_unique), ncols=2)
         for idx, y_l in enumerate(y_unique):
-            l_idx = np.argmax(y_, axis=1) == y_l
-            l_idx = l_idx[:, 0]
+            l_idx = y_ == y_l
 
             axarr[idx, 0].plot(x_[l_idx][:2].reshape(-1, n_c))
             axarr[idx, 0].plot(px[l_idx][:2].reshape(-1, n_c), linestyle='dotted')
@@ -133,7 +135,6 @@ def main():
 
         # Plot PCA decomp
         z_pca = PCA(n_components=2).fit_transform(qa)
-        print(qa.shape, z_pca.shape, y_.shape)
         plt.clf()
         plt.figure()
         for i in set(y_unique):
