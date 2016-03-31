@@ -103,42 +103,41 @@ def main():
     train_args['inputs']['warmup'] = 1.1
 
     def custom_evaluation(model, path):
+        # Get model output
+        x_ = test_set[0]
+        y_ = test_set[1]
+
+        # qy = model.f_qy(x_, 1)
+        qa = model.f_qa(x_, 1)
+        qz = model.f_qz(x_, y_, 1)
+        # pa = model.f_pa(qz, y_, 1)
+        px = model.f_px(qa, qz, y_, 1)
+        px_mu = model.f_mu(qa, qz, y_, 1)
+        px_var = np.exp(model.f_var(qa, qz, y_, 1))
+
         plt.clf()
         f, axarr = plt.subplots(nrows=len(y_unique), ncols=2)
-        z_ = np.empty((0, model.n_z))
-        y_ = np.empty((0, ))
         for idx, y_l in enumerate(y_unique):
-            act_idx = test_set[1] == y_l
-            test_act = test_set[0][act_idx[:, 0]][:2]
-            test_y = test_set[1][act_idx[:, 0]][:2]
+            l_idx = np.argmax(y_, axis=1) == y_l
+            l_idx = l_idx[:, 0]
 
-            # qy = model.f_qy(test_act, 1)
-            qa = model.f_qa(test_act, 1)
-            qz = model.f_qz(test_act, test_y, 1)
-            # pa = model.f_pa(qz, test_y, 1)
-            px = model.f_px(qa, qz, test_y, 1)
-            px_mu = model.f_mu(qa, qz, test_y, 1)
-            px_var = np.exp(model.f_var(qa, qz, test_y, 1))
-
-            z_ = np.concatenate((z_, qa))
-            y_ = np.concatenate((y_, np.ones((len(test_act), ))*y_l))
-
-            axarr[idx, 0].plot(test_act.reshape(-1, n_c))
-            axarr[idx, 0].plot(px.reshape(-1, n_c), linestyle='dotted')
-            axarr[idx, 1].plot(px_mu.reshape(-1, n_c), label="mu")
-            axarr[idx, 1].plot(px_var.reshape(-1, n_c), label="var")
+            axarr[idx, 0].plot(x_[l_idx][:2].reshape(-1, n_c))
+            axarr[idx, 0].plot(px[l_idx][:2].reshape(-1, n_c), linestyle='dotted')
+            axarr[idx, 1].plot(px_mu[l_idx][:2].reshape(-1, n_c), label="mu")
+            axarr[idx, 1].plot(px_var[l_idx][:2].reshape(-1, n_c), label="var")
             plt.legend()
 
         f.set_size_inches(12, 8)
         f.savefig(path, dpi=100, format='png')
         plt.close(f)
 
-        # Plot PCA decomp of Z
-        z_pca = PCA(n_components=2).fit_transform(z_)
+        # Plot PCA decomp
+        z_pca = PCA(n_components=2).fit_transform(qa)
+        print(qa.shape, z_pca.shape, y_.shape)
         plt.clf()
         plt.figure()
-        for c, i in zip(['r', 'b'], set(y_unique)):
-            plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=c, alpha=0.8)
+        for i in set(y_unique):
+            plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], alpha=0.8)
         plt.legend()
         plt.title('PCA of A')
         plt.savefig(path.replace('custom_eval_plot', 'pca/z'))
