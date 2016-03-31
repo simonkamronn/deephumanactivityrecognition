@@ -18,51 +18,51 @@ import seaborn as sns
 def main():
     seed = np.random.randint(1, 2147462579)
 
-    def sinus_seq(period, samples, length):
-        X = np.linspace(-np.pi*(samples/period), np.pi*(samples/period), samples)
-        X = np.reshape(np.sin(X), (-1, length, 1))
-        X += np.random.randn(*X.shape)*0.1
-        # X = (X - np.min(X))/(np.max(X) - np.min(X))
-        return X, np.ones((samples/length, 1))
-
-    X1, y1 = sinus_seq(20, 100000, 40)
-    X2, y2 = sinus_seq(12, 100000, 40)
-    X3, y3 = sinus_seq(8, 100000, 40)
-
-    X = np.concatenate((X1, X2, X3)).astype('float32')
-    y = np.concatenate((y1*0, y2*1, y3*2), axis=0).astype('int')[:, 0]
-
-    y_unique = np.unique(y)
-    y = one_hot(y, len(y_unique))
-    num_classes = len(y_unique)
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.9)
-
-    # X, y, users, stats = har.load()
+    # def sinus_seq(period, samples, length):
+    #     X = np.linspace(-np.pi*(samples/period), np.pi*(samples/period), samples)
+    #     X = np.reshape(np.sin(X), (-1, length, 1))
+    #     X += np.random.randn(*X.shape)*0.1
+    #     # X = (X - np.min(X))/(np.max(X) - np.min(X))
+    #     return X, np.ones((samples/length, 1))
     #
-    # n_samples, step = 25, 25
-    # load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
-    #                     step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
-    # X, y, name, users, stats = load_data.uci_hapt()
+    # X1, y1 = sinus_seq(20, 100000, 40)
+    # X2, y2 = sinus_seq(12, 100000, 40)
+    # X3, y3 = sinus_seq(8, 100000, 40)
     #
-    # limited_labels = y < 5
-    # y = y[limited_labels]
-    # X = X[limited_labels].astype(np.float32)
-    # users = users[limited_labels]
-    #
-    # X -= X.mean(axis=0)
-    #
-    # # Compress labels
-    # for idx, label in enumerate(np.unique(y)):
-    #     if not np.equal(idx, label):
-    #         y[y == label] = idx
+    # X = np.concatenate((X1, X2, X3)).astype('float32')
+    # y = np.concatenate((y1*0, y2*1, y3*2), axis=0).astype('int')[:, 0]
     #
     # y_unique = np.unique(y)
     # y = one_hot(y, len(y_unique))
     # num_classes = len(y_unique)
     #
-    # # Split into train and test stratified by users
-    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1000, stratify=users)
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.9)
+
+    # X, y, users, stats = har.load()
+    #
+    n_samples, step = 25, 25
+    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
+                        step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
+    X, y, name, users, stats = load_data.uci_hapt()
+
+    limited_labels = y < 18
+    y = y[limited_labels]
+    X = X[limited_labels].astype(np.float32)
+    users = users[limited_labels]
+
+    X -= X.mean(axis=0)
+
+    # Compress labels
+    for idx, label in enumerate(np.unique(y)):
+        if not np.equal(idx, label):
+            y[y == label] = idx
+
+    y_unique = np.unique(y)
+    y = one_hot(y, len(y_unique))
+    num_classes = len(y_unique)
+
+    # Split into train and test stratified by users
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1000, stratify=users)
 
     n_samples = 100
     # Split training into labelled and unlabelled. Optionally stratified by the label
@@ -136,16 +136,22 @@ def main():
         plt.close(f)
 
         # Plot PCA decomp
-        z_pca = PCA(n_components=2).fit_transform(qa)
+        z_pca = PCA(n_components=2).fit_transform(qz)
+        a_pca = PCA(n_components=2).fit_transform(qa)
+        print(z_pca.shape, a_pca.shape)
 
         palette = itertools.cycle(sns.color_palette())
         plt.clf()
         plt.figure()
+        f, axarr = plt.subplots(ncols=2)
         for i in set(y_unique):
-            plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=next(palette), alpha=0.8)
+            c = next(palette)
+            axarr[0].scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=c, alpha=0.8)
+            axarr[1].scatter(a_pca[y_ == i, 0], a_pca[y_ == i, 1], c=c, alpha=0.8)
         plt.legend()
-        plt.title('PCA of A')
-        plt.savefig(path.replace('custom_eval_plot', 'pca/z'))
+        plt.title('PCA of Z and A')
+        f.set_size_inches(10, 6)
+        plt.savefig(path.replace('custom_eval_plot', 'pca/z'),  dpi=100, format='png')
         plt.close()
 
     # Define training loop. Output training evaluations every 1 epoch
