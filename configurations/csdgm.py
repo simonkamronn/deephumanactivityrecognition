@@ -106,8 +106,8 @@ def run_cvae():
         y_ = np.empty((0, ))
         for idx, y_l in enumerate(np.unique(y)):
             act_idx = test_set[1] == y_l
-            test_act = test_set[0][act_idx[:2, 0]]
-            test_y = test_set[1][act_idx[:2, 0]]
+            test_act = test_set[0][act_idx[:, 0]][:2]
+            test_y = test_set[1][act_idx[:, 0]][:2]
 
             # qy = model.f_qy(test_act, 1)
             qa = model.f_qa(test_act, 1)
