@@ -78,12 +78,12 @@ def run_cvae():
 
     # Initialize the auxiliary deep generative model.
     # [num_filters, stride, pool]
-    filters = [[64, 1, 2],
-               [64, 1, 2],
-               [64, 1, 2],
-               [64, 1, 2]]
-    model = CSDGM(n_c=int(n_c), n_l=int(n_l), n_a=100, n_z=64, n_y=num_classes, qa_hid=[100],
-                  qz_hid=[100], qy_hid=[100], px_hid=[64], pa_hid=[100], filters=filters,
+    filters = [[128, 1, 2],
+               [128, 1, 2],
+               [128, 1, 2],
+               [128, 1, 2]]
+    model = CSDGM(n_c=int(n_c), n_l=int(n_l), n_a=100, n_z=128, n_y=num_classes, qa_hid=[100],
+                  qz_hid=[100], qy_hid=[100], px_hid=[128], pa_hid=[100], filters=filters,
                   nonlinearity=rectify, batchnorm=False, x_dist='gaussian')
 
     # Copy script to output folder
