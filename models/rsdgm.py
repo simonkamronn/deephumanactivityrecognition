@@ -68,6 +68,7 @@ class RSDGM(Model):
         self.sym_samples = T.iscalar('samples')  # MC samples
         self.sym_z = T.matrix('z')  # latent variable z
         self.sym_a = T.matrix('a')  # auxiliary variable a
+        self.sym_warmup = T.fscalar('warmup')  # warmup to dampen KL term
 
         # Assist methods for collecting the layers
         def dense_layer(layer_in, n, dist_w=init.GlorotNormal, dist_b=init.Normal):
@@ -289,7 +290,7 @@ class RSDGM(Model):
             l_log_px = GaussianLogDensityLayer(l_x_in, l_px_mu, l_px_logvar)
 
         def lower_bound(log_pa, log_qa, log_pz, log_qz, log_py, log_px):
-            lb = log_px + log_py + log_pz + log_pa - log_qa - log_qz
+            lb = log_px + log_py + (log_pz + log_pa - log_qa - log_qz)*(1.1 - self.sym_warmup)
             return lb
 
         # Lower bound for labeled data
@@ -382,7 +383,7 @@ class RSDGM(Model):
                   self.sym_x_u: x_batch_u,
                   self.sym_t_l: t_batch_l}
         inputs = [self.sym_index, self.sym_batchsize, self.sym_bs_l, self.sym_beta,
-                  self.sym_lr, sym_beta1, sym_beta2, self.sym_samples]
+                  self.sym_lr, sym_beta1, sym_beta2, self.sym_samples, self.sym_warmup]
         outputs = [elbo, lb_labeled, lb_unlabeled, log_px]
         f_train = theano.function(inputs=inputs, outputs=outputs, givens=givens, updates=updates)
 
@@ -394,6 +395,7 @@ class RSDGM(Model):
         self.train_args['inputs']['beta1'] = 0.9
         self.train_args['inputs']['beta2'] = 0.999
         self.train_args['inputs']['samples'] = 1
+        self.train_args['inputs']['warmup'] = 0.1
         self.train_args['outputs']['lb'] = '%0.4f'
         self.train_args['outputs']['lb-labeled'] = '%0.4f'
         self.train_args['outputs']['lb-unlabeled'] = '%0.4f'
@@ -404,10 +406,11 @@ class RSDGM(Model):
         class_err = (1. - categorical_accuracy(y, self.sym_t_l).mean()) * 100
         givens = {self.sym_x_l: self.sh_test_x,
                   self.sym_t_l: self.sh_test_t}
-        f_test = theano.function(inputs=[self.sym_samples], outputs=[class_err], givens=givens)
+        f_test = theano.function(inputs=[self.sym_samples, self.sym_warmup], outputs=[class_err], givens=givens)
 
         # Test args.  Note that these can be changed during or prior to training.
         self.test_args['inputs']['samples'] = 1
+        self.test_args['inputs']['warmup'] = 0.1
         self.test_args['outputs']['test'] = '%0.2f%%'
 
         f_validate = None

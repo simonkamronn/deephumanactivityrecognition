@@ -307,7 +307,7 @@ class CSDGM(Model):
             l_log_px = GaussianLogDensityLayer(l_x_in, l_px_mu, l_px_logvar)
 
         def lower_bound(log_pa, log_qa, log_pz, log_qz, log_py, log_px):
-            lb = log_px + log_py + (log_pz + log_pa - log_qa - log_qz)*(1. - self.sym_warmup - 0.1)
+            lb = log_px + log_py + (log_pz + log_pa - log_qa - log_qz)*(1.1 - self.sym_warmup)
             return lb
 
         # Lower bound for labeled data
@@ -406,6 +406,7 @@ class CSDGM(Model):
         self.train_args['inputs']['beta1'] = 0.9
         self.train_args['inputs']['beta2'] = 0.999
         self.train_args['inputs']['samples'] = 1
+        self.train_args['inputs']['warmup'] = 0.1
         self.train_args['outputs']['lb'] = '%0.4f'
         self.train_args['outputs']['lb-labeled'] = '%0.4f'
         self.train_args['outputs']['lb-unlabeled'] = '%0.4f'
@@ -416,10 +417,11 @@ class CSDGM(Model):
         class_err = (1. - categorical_accuracy(y, self.sym_t_l).mean()) * 100
         givens = {self.sym_x_l: self.sh_test_x,
                   self.sym_t_l: self.sh_test_t}
-        f_test = theano.function(inputs=[self.sym_samples], outputs=[class_err], givens=givens)
+        f_test = theano.function(inputs=[self.sym_samples, self.sym_warmup], outputs=[class_err], givens=givens)
 
         # Test args.  Note that these can be changed during or prior to training.
         self.test_args['inputs']['samples'] = 1
+        self.test_args['inputs']['warmup'] = 0.1
         self.test_args['outputs']['test'] = '%0.2f%%'
 
         f_validate = None

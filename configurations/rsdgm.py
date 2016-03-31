@@ -6,6 +6,7 @@ from data_loaders import mnist, har
 from data_loaders.data_helper import one_hot
 from models.rsdgm import RSDGM
 import matplotlib.pyplot as plt
+plt.style.use('ggplot')
 from sklearn.cross_validation import train_test_split
 import numpy as np
 from data_preparation.load_data import LoadHAR
@@ -94,7 +95,7 @@ def main():
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
     train_args['inputs']['samples'] = 1
-    # train_args['inputs']['warmup'] = .5
+    train_args['inputs']['warmup'] = 1
 
     def custom_evaluation(model, path):
         plt.clf()
@@ -147,8 +148,8 @@ def main():
                       f_validate, validate_args,
                       n_train_batches=n_batches,
                       n_epochs=1000,
-                      anneal=[("learningrate", 100, 0.75, 3e-5)])
-                              # ("warmup", 5, 0.99, 0.1)])
+                      anneal=[("learningrate", 100, 0.75, 3e-5),
+                              ("warmup", 5, 0.99, 0.1)])
 
     # image_to_movie.create(model.get_root_path() + '/training_custom_evals/', rate=3)
 

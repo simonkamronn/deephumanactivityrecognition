@@ -42,10 +42,10 @@ def run_vrae_har():
 
     n_samples, step = 25, 25
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
-                        step=step, normalize='segments', comp_magnitude=False, simple_labels=True, common_labels=True)
+                        step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
     X, y, name, users, stats = load_data.uci_hapt()
 
-    limited_labels = y < 100
+    limited_labels = y < 18
     y = y[limited_labels]
     X = X[limited_labels].astype(np.float32)
     users = users[limited_labels]
@@ -95,7 +95,7 @@ def run_vrae_har():
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
     train_args['inputs']['samples'] = 1
-    train_args['inputs']['warmup'] = (1 + .1)
+    train_args['inputs']['warmup'] = 1
 
     y_test = np.argmax(test_set[1], axis=1)
     def custom_evaluation(model, path):
@@ -140,7 +140,7 @@ def run_vrae_har():
 
     # Define training loop. Output training evaluations every 1 epoch
     # and the custom evaluation method every 10 epochs.
-    train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=20, f_custom_eval=custom_evaluation)
+    train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=10, f_custom_eval=custom_evaluation)
     train.add_initial_training_notes("Training the vrae with bn %s. seed %i." % (str(model.batchnorm), seed))
     train.train_model(f_train, train_args,
                       f_test, test_args,
