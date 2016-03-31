@@ -21,8 +21,8 @@ class RSDGM(Model):
     The :class:'RSDGM' ...
     """
 
-    def __init__(self, n_c, n_a, n_z, n_y, qa_hid, qz_hid, qy_hid, px_hid, pa_hid, enc_rnn=256, dec_rnn=256,
-                 n_l=28, nonlinearity=rectify, px_nonlinearity=None, x_dist='bernoulli',
+    def __init__(self, n_l, n_c, n_a, n_z, n_y, qa_hid, qz_hid, qy_hid, px_hid, pa_hid, enc_rnn=256, dec_rnn=256,
+                 nonlinearity=rectify, px_nonlinearity=None, x_dist='bernoulli',
                  batchnorm=False, seed=1234):
         """
         Initialize an skip deep generative model consisting of
@@ -193,11 +193,7 @@ class RSDGM(Model):
         elif x_dist == 'multinomial':
             l_px_azy = DenseLayer(l_px_azy, n_c, init.GlorotNormal(), init.Normal(init_w), softmax)
         elif x_dist == 'gaussian':
-            l_px_azy, l_px_zy_mu, l_px_zy_logvar = stochastic_layer(l_px_azy, n_c, 1, px_nonlinearity)
-
-        l_px_zy_mu = ReshapeLayer(l_px_zy_mu, (-1, n_l, n_c))
-        l_px_zy_logvar = ReshapeLayer(l_px_zy_logvar, (-1, n_l, n_c))
-        l_px_azy = ReshapeLayer(l_px_azy, (-1, n_l, n_c))
+            l_px_azy, l_px_zy_mu, l_px_zy_logvar = stochastic_layer(l_px_azy, n_c, self.sym_samples, px_nonlinearity)
 
         # Reshape all the model layers to have the same size
         self.l_x_in = l_x_in
@@ -219,9 +215,10 @@ class RSDGM(Model):
         self.l_pa_logvar = ReshapeLayer(l_pa_zy_logvar, (-1, self.sym_samples, 1, n_a))
 
         self.l_px = ReshapeLayer(l_px_azy, (-1, n_l, self.sym_samples, 1, n_c))
-        self.l_px_mu = ReshapeLayer(l_px_zy_mu, (-1, n_l, self.sym_samples, 1, n_c)) if x_dist == "gaussian" else None
-        self.l_px_logvar = ReshapeLayer(l_px_zy_logvar,
-                                        (-1, n_l, self.sym_samples, 1, n_c)) if x_dist == "gaussian" else None
+        self.l_px_mu = ReshapeLayer(l_px_zy_mu, (-1, n_l, self.sym_samples, 1, n_c)) \
+            if x_dist == "gaussian" else None
+        self.l_px_logvar = ReshapeLayer(l_px_zy_logvar, (-1, n_l, self.sym_samples, 1, n_c)) \
+            if x_dist == "gaussian" else None
 
         # Predefined functions
         inputs = [self.sym_x_l, self.sym_samples]
@@ -232,13 +229,23 @@ class RSDGM(Model):
         outputs = get_output(self.l_qa, self.sym_x_l, deterministic=True).mean(axis=(1, 2))
         self.f_qa = theano.function(inputs, outputs)
 
+        inputs = {l_x_in: self.sym_x_l, l_y_in: self.sym_t_l}
+        outputs = get_output(l_qz_axy, inputs, deterministic=True)
+        self.f_qz = theano.function([self.sym_x_l, self.sym_t_l, self.sym_samples], outputs)
+
         inputs = {l_qz_axy: self.sym_z, l_y_in: self.sym_t_l}
         outputs = get_output(self.l_pa, inputs, deterministic=True)
         self.f_pa = theano.function([self.sym_z, self.sym_t_l, self.sym_samples], outputs)
 
         inputs = {l_qa_x: self.sym_a, l_qz_axy: self.sym_z, l_y_in: self.sym_t_l}
-        outputs = get_output(self.l_px, inputs, deterministic=True)
+        outputs = get_output(self.l_px, inputs, deterministic=True).mean(axis=(2, 3))
         self.f_px = theano.function([self.sym_a, self.sym_z, self.sym_t_l, self.sym_samples], outputs)
+
+        outputs = get_output(self.l_px_mu, inputs, deterministic=True).mean(axis=(2, 3))
+        self.f_mu = theano.function([self.sym_a, self.sym_z, self.sym_t_l, self.sym_samples], outputs)
+
+        outputs = get_output(self.l_px_logvar, inputs, deterministic=True).mean(axis=(2, 3))
+        self.f_var = theano.function([self.sym_a, self.sym_z, self.sym_t_l, self.sym_samples], outputs)
 
         # Define model parameters
         self.model_params = get_all_params([self.l_qy, self.l_pa, self.l_px])
@@ -290,13 +297,14 @@ class RSDGM(Model):
         inputs = {self.l_x_in: self.sym_x_l, self.l_y_in: self.sym_t_l}
         out = get_output(out_layers, inputs, batch_norm_update_averages=False, batch_norm_use_averages=False)
         log_pa_l, log_pz_l, log_qa_x_l, log_qz_axy_l, log_px_zy_l, log_qy_ax_l = out
+
         # Prior p(y) expecting that all classes are evenly distributed
         py_l = softmax(T.zeros((self.sym_x_l.shape[0], self.n_y)))
         log_py_l = -categorical_crossentropy(py_l, self.sym_t_l).reshape((-1, 1)).dimshuffle((0, 'x', 'x', 1))
         lb_l = lower_bound(log_pa_l, log_qa_x_l, log_pz_l, log_qz_axy_l, log_py_l, log_px_zy_l)
         lb_l = lb_l.mean(axis=(1, 2))  # Mean over the sampling dimensions
         log_qy_ax_l *= (self.sym_beta * (n / n_l))  # Scale the supervised cross entropy with the alpha constant
-        lb_l -= log_qy_ax_l.mean(axis=(1, 2))  # Collect the lower bound term and mean over sampling dimensions
+        lb_l += log_qy_ax_l.mean(axis=(1, 2))  # Collect the lower bound term and mean over sampling dimensions
 
         # Lower bound for unlabeled data
         bs_u = self.sym_x_u.shape[0]
@@ -316,20 +324,19 @@ class RSDGM(Model):
 
         # Since the expectation of var a is outside the integration we calculate E_q(a|x) first
         a_x_u = get_output(self.l_qa, self.sym_x_u, batch_norm_update_averages=True, batch_norm_use_averages=False)
-        a_x_u_rep = a_x_u.reshape((1, bs_u * self.sym_samples, self.n_a)).repeat(self.n_y, axis=0).reshape(
-            (-1, self.n_a))
+        a_x_u_rep = a_x_u.reshape((1, bs_u * self.sym_samples, self.n_a)).repeat(self.n_y, axis=0).reshape((-1, self.n_a))
         out_layers = [l_log_pa, l_log_pz, l_log_qa, l_log_qz, l_log_px]
         inputs = {self.l_x_in: x_u, self.l_y_in: t_u, self.l_a_in: a_x_u_rep}
         out = get_output(out_layers, inputs, batch_norm_update_averages=False, batch_norm_use_averages=False)
         log_pa_u, log_pz_u, log_qa_x_u, log_qz_axy_u, log_px_zy_u = out
+
         # Prior p(y) expecting that all classes are evenly distributed
         py_u = softmax(T.zeros((bs_u * self.n_y, self.n_y)))
         log_py_u = -categorical_crossentropy(py_u, t_u).reshape((-1, 1)).dimshuffle((0, 'x', 'x', 1))
         lb_u = lower_bound(log_pa_u, log_qa_x_u, log_pz_u, log_qz_axy_u, log_py_u, log_px_zy_u)
         lb_u = lb_u.reshape((self.n_y, 1, 1, bs_u)).transpose(3, 1, 2, 0).mean(axis=(1, 2))
         inputs = {self.l_x_in: self.sym_x_u, self.l_a_in: a_x_u.reshape((-1, self.n_a))}
-        y_u = get_output(self.l_qy, inputs, batch_norm_update_averages=True, batch_norm_use_averages=False).mean(
-            axis=(1, 2))
+        y_u = get_output(self.l_qy, inputs, batch_norm_update_averages=True, batch_norm_use_averages=False).mean(axis=(1, 2))
         y_u += 1e-8  # Ensure that we get no NANs when calculating the entropy
         y_u /= T.sum(y_u, axis=1, keepdims=True)
         lb_u = (y_u * (lb_u - T.log(y_u))).sum(axis=1)
@@ -351,6 +358,7 @@ class RSDGM(Model):
         elbo = ((lb_l.mean() + lb_u.mean()) * n + weight_priors) / -n
         lb_labeled = -lb_l.mean()
         lb_unlabeled = -lb_u.mean()
+        log_px = log_px_zy_l.mean() + log_px_zy_u.mean()
 
         grads_collect = T.grad(elbo, self.trainable_model_params)
         params_collect = self.trainable_model_params
@@ -375,7 +383,7 @@ class RSDGM(Model):
                   self.sym_t_l: t_batch_l}
         inputs = [self.sym_index, self.sym_batchsize, self.sym_bs_l, self.sym_beta,
                   self.sym_lr, sym_beta1, sym_beta2, self.sym_samples]
-        outputs = [elbo, lb_labeled, lb_unlabeled]
+        outputs = [elbo, lb_labeled, lb_unlabeled, log_px]
         f_train = theano.function(inputs=inputs, outputs=outputs, givens=givens, updates=updates)
 
         # Default training args. Note that these can be changed during or prior to training.
@@ -389,6 +397,7 @@ class RSDGM(Model):
         self.train_args['outputs']['lb'] = '%0.4f'
         self.train_args['outputs']['lb-labeled'] = '%0.4f'
         self.train_args['outputs']['lb-unlabeled'] = '%0.4f'
+        self.train_args['outputs']['log p(x)'] = '%0.4f'
 
         # Validation and test function
         y = get_output(self.l_qy, self.sym_x_l, deterministic=True).mean(axis=(1, 2))
@@ -406,9 +415,9 @@ class RSDGM(Model):
             givens = {self.sym_x_l: self.sh_valid_x,
                       self.sym_t_l: self.sh_valid_t}
             f_validate = theano.function(inputs=[self.sym_samples], outputs=[class_err], givens=givens)
-        # Default validation args. Note that these can be changed during or prior to training.
-        self.validate_args['inputs']['samples'] = 1
-        self.validate_args['outputs']['validation'] = '%0.2f%%'
+            # Default validation args. Note that these can be changed during or prior to training.
+            self.validate_args['inputs']['samples'] = 1
+            self.validate_args['outputs']['validation'] = '%0.2f%%'
 
         return f_train, f_test, f_validate, self.train_args, self.test_args, self.validate_args
 

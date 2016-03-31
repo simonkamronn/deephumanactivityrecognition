@@ -341,7 +341,7 @@ class CSDGM(Model):
         x_u = self.sym_x_u.reshape((1, bs_u, self.n_l, self.n_c)).repeat(self.n_y, axis=0).reshape((-1, self.n_l, self.n_c))
 
         # Since the expectation of var a is outside the integration we calculate E_q(a|x) first
-        a_x_u = get_output(self.l_qa, self.sym_x_u, batch_norm_update_averages=False, batch_norm_use_averages=False)
+        a_x_u = get_output(self.l_qa, self.sym_x_u, batch_norm_update_averages=True, batch_norm_use_averages=False)
         a_x_u_rep = a_x_u.reshape((1, bs_u * self.sym_samples, self.n_a)).repeat(self.n_y, axis=0).reshape((-1, self.n_a))
         out_layers = [l_log_pa, l_log_pz, l_log_qa, l_log_qz, l_log_px]
         inputs = {self.l_x_in: x_u, self.l_y_in: t_u, self.l_a_in: a_x_u_rep}
@@ -354,7 +354,7 @@ class CSDGM(Model):
         lb_u = lower_bound(log_pa_u, log_qa_x_u, log_pz_u, log_qz_axy_u, log_py_u, log_px_zy_u)
         lb_u = lb_u.reshape((self.n_y, 1, 1, bs_u)).transpose(3, 1, 2, 0).mean(axis=(1, 2))
         inputs = {self.l_x_in: self.sym_x_u, self.l_a_in: a_x_u.reshape((-1, self.n_a))}
-        y_u = get_output(self.l_qy, inputs, batch_norm_update_averages=False, batch_norm_use_averages=False).mean(axis=(1, 2))
+        y_u = get_output(self.l_qy, inputs, batch_norm_update_averages=True, batch_norm_use_averages=False).mean(axis=(1, 2))
         y_u += 1e-8  # Ensure that we get no NANs when calculating the entropy
         y_u /= T.sum(y_u, axis=1, keepdims=True)
         lb_u = (y_u * (lb_u - T.log(y_u))).sum(axis=1)

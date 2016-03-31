@@ -4,7 +4,7 @@ from training.train import TrainModel
 from lasagne_extensions.nonlinearities import rectify
 from data_loaders import mnist, har
 from data_loaders.data_helper import one_hot
-from models.csdgm import CSDGM
+from models.rsdgm import RSDGM
 import matplotlib.pyplot as plt
 from sklearn.cross_validation import train_test_split
 import numpy as np
@@ -12,7 +12,7 @@ from data_preparation.load_data import LoadHAR
 from sklearn.decomposition import PCA
 
 
-def run_cvae():
+def main():
     seed = np.random.randint(1, 2147462579)
 
     # def sinus_seq(period, samples, length):
@@ -77,13 +77,8 @@ def run_cvae():
     bs = n / n_batches  # The batchsize.
 
     # Initialize the auxiliary deep generative model.
-    # [num_filters, stride, pool]
-    filters = [[64, 1, 2],
-               [64, 1, 2],
-               [64, 1, 2],
-               [64, 1, 2]]
-    model = CSDGM(n_c=int(n_c), n_l=int(n_l), n_a=100, n_z=64, n_y=num_classes, qa_hid=[100],
-                  qz_hid=[100], qy_hid=[100], px_hid=[64], pa_hid=[100], filters=filters,
+    model = RSDGM(n_c=int(n_c), n_l=int(n_l), n_a=100, n_z=64, n_y=num_classes, qa_hid=[100],
+                  qz_hid=[100], qy_hid=[100], px_hid=[64], pa_hid=[100],
                   nonlinearity=rectify, batchnorm=False, x_dist='gaussian')
 
     # Copy script to output folder
@@ -99,7 +94,7 @@ def run_cvae():
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
     train_args['inputs']['samples'] = 1
-    train_args['inputs']['warmup'] = .5
+    # train_args['inputs']['warmup'] = .5
 
     def custom_evaluation(model, path):
         plt.clf()
@@ -115,9 +110,9 @@ def run_cvae():
             qa = model.f_qa(test_act, 1)
             qz = model.f_qz(test_act, test_y, 1)
             # pa = model.f_pa(qz, test_y, 1)
-            px = model.f_px(test_act, qa, qz, test_y, 1)
-            px_mu = model.f_mu(test_act, qa, qz, test_y, 1)
-            px_var = np.exp(model.f_var(test_act, qa, qz, test_y, 1))
+            px = model.f_px(qa, qz, test_y, 1)
+            px_mu = model.f_mu(qa, qz, test_y, 1)
+            px_var = np.exp(model.f_var(qa, qz, test_y, 1))
 
             z_ = np.concatenate((z_, qz))
             y_ = np.concatenate((y_, np.ones((len(test_act), ))*y_l))
@@ -152,10 +147,10 @@ def run_cvae():
                       f_validate, validate_args,
                       n_train_batches=n_batches,
                       n_epochs=1000,
-                      anneal=[("learningrate", 100, 0.75, 3e-5),
-                              ("warmup", 5, 0.99, 0.1)])
+                      anneal=[("learningrate", 100, 0.75, 3e-5)])
+                              # ("warmup", 5, 0.99, 0.1)])
 
     # image_to_movie.create(model.get_root_path() + '/training_custom_evals/', rate=3)
 
 if __name__ == "__main__":
-    run_cvae()
+    main()
