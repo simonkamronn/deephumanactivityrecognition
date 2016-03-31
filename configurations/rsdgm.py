@@ -11,6 +11,8 @@ from sklearn.cross_validation import train_test_split
 import numpy as np
 from data_preparation.load_data import LoadHAR
 from sklearn.decomposition import PCA
+import itertools
+import seaborn as sns
 
 
 def main():
@@ -135,10 +137,12 @@ def main():
 
         # Plot PCA decomp
         z_pca = PCA(n_components=2).fit_transform(qa)
+
+        palette = itertools.cycle(sns.color_palette())
         plt.clf()
         plt.figure()
         for i in set(y_unique):
-            plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], alpha=0.8)
+            plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=next(palette), alpha=0.8)
         plt.legend()
         plt.title('PCA of A')
         plt.savefig(path.replace('custom_eval_plot', 'pca/z'))
