@@ -6,7 +6,6 @@ from data_loaders import mnist, har
 from data_loaders.data_helper import one_hot
 from models.rsdgm import RSDGM
 import matplotlib.pyplot as plt
-plt.style.use('ggplot')
 from sklearn.cross_validation import train_test_split
 import numpy as np
 from data_preparation.load_data import LoadHAR
@@ -50,7 +49,7 @@ def main():
     X = X[limited_labels].astype(np.float32)
     users = users[limited_labels]
 
-    X -= X.mean(axis=0)
+    # X -= X.mean(axis=0)
 
     # Compress labels
     for idx, label in enumerate(np.unique(y)):
@@ -82,8 +81,8 @@ def main():
     bs = n / n_batches  # The batchsize.
 
     # Initialize the auxiliary deep generative model.
-    model = RSDGM(n_c=int(n_c), n_l=int(n_l), n_a=100, n_z=64, n_y=num_classes, qa_hid=[100],
-                  qz_hid=[100], qy_hid=[100], px_hid=[64], pa_hid=[100],
+    model = RSDGM(n_c=int(n_c), n_l=int(n_l), n_a=100, n_z=128, n_y=num_classes, qa_hid=[100],
+                  qz_hid=[100], qy_hid=[100], px_hid=[128], pa_hid=[100],
                   nonlinearity=rectify, batchnorm=False, x_dist='gaussian')
 
     # Copy script to output folder
@@ -97,7 +96,7 @@ def main():
     # Update the default function arguments.
     train_args['inputs']['batchsize_unlabeled'] = bs
     train_args['inputs']['batchsize_labeled'] = n_samples
-    train_args['inputs']['beta'] = .05
+    train_args['inputs']['beta'] = .1
     train_args['inputs']['learningrate'] = 3e-4
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
@@ -138,7 +137,6 @@ def main():
         # Plot PCA decomp
         z_pca = PCA(n_components=2).fit_transform(qz)
         a_pca = PCA(n_components=2).fit_transform(qa)
-        print(z_pca.shape, a_pca.shape)
 
         palette = itertools.cycle(sns.color_palette())
         plt.clf()
@@ -147,7 +145,7 @@ def main():
         for i in set(y_unique):
             c = next(palette)
             axarr[0].scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=c, alpha=0.8)
-            axarr[1].scatter(a_pca[y_ == i, 0], a_pca[y_ == i, 1], c=c, alpha=0.8)
+            axarr[1].scatter(a_pca[y_ == i, 0], a_pca[y_ == i, 1], c=c, alpha=0.8, label=str(i))
         plt.legend()
         plt.title('PCA of Z and A')
         f.set_size_inches(10, 6)

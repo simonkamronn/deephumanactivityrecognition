@@ -14,7 +14,7 @@ import itertools
 import seaborn as sns
 
 
-def run_cvae():
+def main():
     seed = np.random.randint(1, 2147462579)
 
     # def sinus_seq(period, samples, length):
@@ -35,7 +35,7 @@ def run_cvae():
 
     # X, y, users, stats = har.load()
 
-    n_samples, step = 25, 25
+    n_samples, step = 50, 50
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
                         step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
     X, y, name, users, stats = load_data.uci_hapt()
@@ -45,7 +45,7 @@ def run_cvae():
     X = X[limited_labels].astype(np.float32)
     users = users[limited_labels]
 
-    X -= X.mean(axis=0)
+    # X -= X.mean(axis=0)
 
     # Compress labels
     for idx, label in enumerate(np.unique(y)):
@@ -97,12 +97,12 @@ def run_cvae():
     # Update the default function arguments.
     train_args['inputs']['batchsize_unlabeled'] = bs
     train_args['inputs']['batchsize_labeled'] = n_samples
-    train_args['inputs']['beta'] = .05
+    train_args['inputs']['beta'] = .1
     train_args['inputs']['learningrate'] = 3e-4
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
     train_args['inputs']['samples'] = 1
-    train_args['inputs']['warmup'] = 0.9
+    train_args['inputs']['warmup'] = 1.1
 
     def custom_evaluation(model, path):
         # Get model output
@@ -138,7 +138,6 @@ def run_cvae():
         # Plot PCA decomp
         z_pca = PCA(n_components=2).fit_transform(qz)
         a_pca = PCA(n_components=2).fit_transform(qa)
-        print(z_pca.shape, a_pca.shape)
 
         palette = itertools.cycle(sns.color_palette())
         plt.clf()
@@ -170,4 +169,4 @@ def run_cvae():
     # image_to_movie.create(model.get_root_path() + '/training_custom_evals/', rate=3)
 
 if __name__ == "__main__":
-    run_cvae()
+    main()
