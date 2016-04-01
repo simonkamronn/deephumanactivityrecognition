@@ -42,7 +42,7 @@ def main():
     #
     n_samples, step = 25, 25
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
-                        step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
+                        step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
     X, y, name, users, stats = load_data.uci_hapt()
 
     limited_labels = y < 18

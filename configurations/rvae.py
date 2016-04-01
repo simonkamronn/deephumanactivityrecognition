@@ -44,15 +44,15 @@ def run_vrae_har():
 
     n_samples, step = 25, 25
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
-                        step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
+                        step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
     X, y, name, users, stats = load_data.uci_hapt()
 
-    limited_labels = y < 18
+    limited_labels = y < 4
     y = y[limited_labels]
     X = X[limited_labels].astype(np.float32)
     users = users[limited_labels]
 
-    X -= X.mean(axis=0)
+    # X -= X.mean(axis=0)
 
     # Compress labels
     for idx, label in enumerate(np.unique(y)):
@@ -97,7 +97,7 @@ def run_vrae_har():
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
     train_args['inputs']['samples'] = 1
-    train_args['inputs']['warmup'] = 1
+    train_args['inputs']['warmup'] = 1.1
 
     y_test = np.argmax(test_set[1], axis=1)
     def custom_evaluation(model, path):
@@ -137,7 +137,7 @@ def run_vrae_har():
         for i in set(y_unique):
             plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=next(palette), alpha=0.8)
         plt.legend()
-        plt.title('PCA of A')
+        plt.title('PCA of Z')
         plt.savefig(path.replace('custom_eval_plot', 'pca/z'))
         plt.close()
 

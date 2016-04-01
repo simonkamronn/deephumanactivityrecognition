@@ -37,10 +37,10 @@ def run_cvae():
 
     n_samples, step = 25, 25
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
-                        step=step, normalize='segments', comp_magnitude=True, simple_labels=True, common_labels=True)
+                        step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
     X, y, name, users, stats = load_data.uci_hapt()
 
-    limited_labels = y < 5
+    limited_labels = y < 4
     y = y[limited_labels]
     X = X[limited_labels].astype(np.float32)
     users = users[limited_labels]
@@ -113,9 +113,9 @@ def run_cvae():
         qa = model.f_qa(x_, 1)
         qz = model.f_qz(x_, y_, 1)
         # pa = model.f_pa(qz, y_, 1)
-        px = model.f_px(qa, qz, y_, 1)
-        px_mu = model.f_mu(qa, qz, y_, 1)
-        px_var = np.exp(model.f_var(qa, qz, y_, 1))
+        px = model.f_px(x_, qa, qz, y_, 1)
+        px_mu = model.f_mu(x_, qa, qz, y_, 1)
+        px_var = np.exp(model.f_var(x_, qa, qz, y_, 1))
 
         # reduce y to integers
         y_ = np.argmax(y_, axis=1)
@@ -136,16 +136,23 @@ def run_cvae():
         plt.close(f)
 
         # Plot PCA decomp
-        z_pca = PCA(n_components=2).fit_transform(qa)
+        z_pca = PCA(n_components=2).fit_transform(qz)
+        a_pca = PCA(n_components=2).fit_transform(qa)
+        print(z_pca.shape, a_pca.shape)
 
         palette = itertools.cycle(sns.color_palette())
         plt.clf()
         plt.figure()
+        f, axarr = plt.subplots(ncols=2)
         for i in set(y_unique):
-            plt.scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=next(palette), alpha=0.8)
+            c = next(palette)
+            axarr[0].scatter(z_pca[y_ == i, 0], z_pca[y_ == i, 1], c=c, alpha=0.8)
+            axarr[1].scatter(a_pca[y_ == i, 0], a_pca[y_ == i, 1], c=c, alpha=0.8, label=str(i))
         plt.legend()
-        plt.title('PCA of A')
-        plt.savefig(path.replace('custom_eval_plot', 'pca/z'))
+        axarr[0].set_title('Z')
+        axarr[1].set_title('A')
+        f.set_size_inches(10, 6)
+        plt.savefig(path.replace('custom_eval_plot', 'pca/z'),  dpi=100, format='png')
         plt.close()
 
     # Define training loop. Output training evaluations every 1 epoch
