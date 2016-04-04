@@ -83,12 +83,13 @@ def run_rae_har():
         y_ = np.argmax(y_, axis=1)
 
         plt.clf()
-        f, axarr = plt.subplots(nrows=num_classes, ncols=1)
-        for idx, y_l in enumerate(num_classes):
+        f, axarr = plt.subplots(nrows=num_classes, ncols=n_c)
+        for idx, y_l in enumerate(y_unique):
             l_idx = y_ == y_l
 
-            axarr[idx].plot(x_[l_idx][:2].reshape(-1, n_c), color='red')
-            axarr[idx].plot(xhat[l_idx][:2].reshape(-1, n_c), color='blue', linestyle='dotted')
+            for c in range(n_c):
+                axarr[idx, c].plot(x_[l_idx, :, c][:2].reshape(-1), color='red')
+                axarr[idx, c].plot(xhat[l_idx, :, c][:2].reshape(-1), color='blue', linestyle='dotted')
 
         f.set_size_inches(12, 3*num_classes)
         f.savefig(path, dpi=100, format='png')
