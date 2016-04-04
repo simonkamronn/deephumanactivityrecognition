@@ -23,12 +23,11 @@ class CAE(Model):
 
         # Overwrite input layer
         sequence_length, n_features = n_in
-        self.l_in = InputLayer(shape=(None, sequence_length, n_features))
-        input_layer = self.l_in
-        print("Input shape", get_output_shape(input_layer))
+        l_x_in = InputLayer(shape=(None, sequence_length, n_features))
+        print("Input shape", get_output_shape(l_x_in))
 
         # Reshape
-        layer = ReshapeLayer(input_layer, (-1, 1, sequence_length, n_features))
+        layer = ReshapeLayer(l_x_in, (-1, 1, sequence_length, n_features))
 
         # Add input noise
         # self.log += "\nAdding noise layer: 0.05"
@@ -63,6 +62,12 @@ class CAE(Model):
         ret['deconv1'] = layer = Conv2DLayer(layer, num_filters=1, filter_size=(3, 1), nonlinearity=None)
         ret['output'] = layer = ReshapeLayer(layer, (-1, sequence_length, n_features))
         print("CAE out shape", get_output_shape(layer))
+
+        self.l_x_in = l_x_in
+
+        inputs = {l_x_in: self.sym_x}
+        outputs = get_output(layer, inputs, deterministic=True)
+        self.f_px = theano.function([self.sym_x], outputs, on_unused_input='warn')
 
         self.model = ret['output']
         self.model_params = get_all_params(self.model)
