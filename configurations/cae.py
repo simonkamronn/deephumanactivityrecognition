@@ -50,8 +50,8 @@ def main():
     bs = n / n_batches  # The batchsize.
 
     model = CAE(n_in=(int(n_l), int(n_c)),
-                filters=[8, 16, 32, 64],
-                n_hidden=64,
+                filters=[8, 16, 32, 64, 128],
+                n_hidden=128,
                 n_out=n_samples,
                 trans_func=leaky_rectify,
                 stats=0)
@@ -60,9 +60,7 @@ def main():
     copy_script(__file__, model)
 
     # Build model
-    f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
-                                                                                          test_set,
-                                                                                          None)
+    f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)
 
     def custom_evaluation(model, path):
         # Get model output
@@ -87,12 +85,6 @@ def main():
         plt.close(f)
 
     train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=10, f_custom_eval=custom_evaluation)
-    train.train_model(f_train, train_args,
-                      f_test, test_args,
-                      f_validate, validate_args,
-                      n_train_batches=n_batches,
-                      n_epochs=10000,
-                      anneal=[("learningrate", 100, 0.75, 3e-5)])
     train.pickle = False
 
     train.write_to_logger("Normalizing: %s" % load_data.normalize)
@@ -106,7 +98,7 @@ def main():
     train.write_to_logger("Add filter separated signals: %s" % load_data.add_filter)
     train.write_to_logger("Differentiate: %s" % load_data.differentiate)
 
-    train_args['inputs']['batchsize'] = 100
+    train_args['inputs']['batchsize'] = bs
     train_args['inputs']['learningrate'] = 1e-3
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999

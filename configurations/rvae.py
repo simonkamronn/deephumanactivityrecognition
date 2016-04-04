@@ -92,7 +92,7 @@ def run_vrae_har():
     # Get the training functions.
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set, test_set)
     # Update the default function arguments.
-    train_args['inputs']['batchsize'] = 100
+    train_args['inputs']['batchsize'] = bs
     train_args['inputs']['learningrate'] = 1e-3
     train_args['inputs']['beta1'] = 0.9
     train_args['inputs']['beta2'] = 0.999
@@ -118,10 +118,10 @@ def run_vrae_har():
             l_idx = y_ == y_l
 
             for c in range(n_c):
-                axarr[idx, c*2].plot(x_[l_idx][:2].reshape(-1, n_c))
-                axarr[idx, c*2].plot(px[l_idx][:2].reshape(-1, n_c), linestyle='dotted')
-                axarr[idx, c*2 + 1].plot(px_mu[l_idx][:2].reshape(-1, n_c), label="mu")
-                axarr[idx, c*2 + 1].plot(px_var[l_idx][:2].reshape(-1, n_c), label="var")
+                axarr[idx, c*2].plot(x_[l_idx, :, c][:2].reshape(-1))
+                axarr[idx, c*2].plot(px[l_idx, :, c][:2].reshape(-1), linestyle='dotted')
+                axarr[idx, c*2 + 1].plot(px_mu[l_idx, :, c][:2].reshape(-1), label="mu")
+                axarr[idx, c*2 + 1].plot(px_var[l_idx, :, c][:2].reshape(-1), label="var")
             plt.legend()
 
         f.set_size_inches(20, num_classes*3)
