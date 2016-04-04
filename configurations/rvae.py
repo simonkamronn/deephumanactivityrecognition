@@ -42,7 +42,7 @@ def run_vrae_har():
     # HAR data
     # X, y, users, stats = har.load()
 
-    n_samples, step = 50, 50
+    n_samples, step = 50, 25
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
                         step=step, normalize='segments', comp_magnitude=False, simple_labels=False, common_labels=False)
     X, y, name, users, stats = load_data.uci_hapt()
@@ -75,12 +75,12 @@ def run_vrae_har():
     print('Train size: ', train_set[0].shape)
     print('Test size: ', test_set[0].shape)
 
-    n, seq, n_x = train_set[0].shape  # Datapoints in the dataset, input features.
+    n, n_l, n_c = train_set[0].shape  # Datapoints in the dataset, input features.
     n_batches = n / 100  # The number of batches.
     bs = n / n_batches  # The batchsize.
 
     # Initialize the auxiliary deep generative model.
-    model = RVAE(n_x=n_x, n_z=128, qz_hid=[256, 256], px_hid=[256, 256], enc_rnn=128, dec_rnn=128, seq_length=seq,
+    model = RVAE(n_c=n_c, n_z=128, qz_hid=[256, 256], px_hid=[256, 256], enc_rnn=256, dec_rnn=256, n_l=n_l,
                  nonlinearity=rectify, batchnorm=False, x_dist='gaussian', px_nonlinearity=None)
 
     # Copy script to output folder

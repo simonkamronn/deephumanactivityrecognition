@@ -21,11 +21,11 @@ class RVAE(Model):
     Implementation of recurrent variational auto-encoder.
     """
 
-    def __init__(self, n_x, n_z, qz_hid, px_hid, enc_rnn=256, dec_rnn=256, seq_length=28,
+    def __init__(self, n_c, n_z, qz_hid, px_hid, enc_rnn=256, dec_rnn=256, n_l=28,
                  nonlinearity=rectify, px_nonlinearity=None, x_dist='bernoulli', batchnorm=False, seed=1234):
         """
         Weights are initialized using the Bengio and Glorot (2010) initialization scheme.
-        :param n_x: Number of inputs.
+        :param n_c: Number of inputs.
         :param n_z: Number of latent.
         :param qz_hid: List of number of deterministic hidden q(z|a,x,y).
         :param px_hid: List of number of deterministic hidden p(a|z,y) & p(x|z,y).
@@ -34,10 +34,10 @@ class RVAE(Model):
         :param batchnorm: Boolean value for batch normalization.
         :param seed: The random seed.
         """
-        super(RVAE, self).__init__(n_x, qz_hid + px_hid, n_z, nonlinearity)
+        super(RVAE, self).__init__(n_c, qz_hid + px_hid, n_z, nonlinearity)
         self.x_dist = x_dist
-        self.n_x = n_x
-        self.seq_length = seq_length
+        self.n_x = n_c
+        self.seq_length = n_l
         self.n_z = n_z
         self.batchnorm = batchnorm
         self._srng = RandomStreams(seed)
@@ -84,7 +84,7 @@ class RVAE(Model):
             return lstm
 
         # RNN encoder implementation
-        l_x_in = InputLayer((None, seq_length, n_x))
+        l_x_in = InputLayer((None, n_l, n_c))
         l_enc_forward = lstm_layer(l_x_in, enc_rnn, return_final=True, backwards=False, name='enc_forward')
         l_enc_backward = lstm_layer(l_x_in, enc_rnn, return_final=True, backwards=True, name='enc_backward')
         l_enc_concat = ConcatLayer([l_enc_forward, l_enc_backward], axis=-1)
@@ -104,11 +104,11 @@ class RVAE(Model):
         l_qz = SampleLayer(l_qz_mu, l_qz_logvar, eq_samples=self.sym_samples, iw_samples=1)
 
         # Generative p(x|z)
-        l_qz_repeat = RepeatLayer(l_qz, n=seq_length)
+        l_qz_repeat = RepeatLayer(l_qz, n=n_l)
 
         # Skip connection to encoder until warmup threshold is reached
         if T.ge(self.sym_warmup, 0.4):
-            l_skip_enc_repeat = RepeatLayer(l_enc, n=seq_length)
+            l_skip_enc_repeat = RepeatLayer(l_enc, n=n_l)
             l_qz_repeat = ConcatLayer([l_qz_repeat, l_skip_enc_repeat], axis=-1)
 
         l_dec_forward = lstm_layer(l_qz_repeat, dec_rnn, return_final=False, backwards=False, name='dec_forward')
@@ -118,7 +118,7 @@ class RVAE(Model):
         l_dec = dense_layer(l_dec, dec_rnn)
 
         # # Overwrite decoder
-        # l_dec = dense_layer(l_qz, seq_length)
+        # l_dec = dense_layer(l_qz, n_l)
 
         # Add additional dense layers
         l_px = l_dec
@@ -127,13 +127,13 @@ class RVAE(Model):
 
         # Reshape the last dimension and perhaps model with a distribution
         if x_dist == 'bernoulli':
-            l_px = DenseLayer(l_px, n_x, init.GlorotNormal(), init.Normal(init_w), sigmoid)
+            l_px = DenseLayer(l_px, n_c, init.GlorotNormal(), init.Normal(init_w), sigmoid)
         elif x_dist == 'multinomial':
-            l_px = DenseLayer(l_px, n_x, init.GlorotNormal(), init.Normal(init_w), softmax)
+            l_px = DenseLayer(l_px, n_c, init.GlorotNormal(), init.Normal(init_w), softmax)
         elif x_dist == 'gaussian':
-            l_px, l_px_mu, l_px_logvar = stochastic_layer(l_px, n_x, self.sym_samples, nonlin=px_nonlinearity)
+            l_px, l_px_mu, l_px_logvar = stochastic_layer(l_px, n_c, self.sym_samples, nonlin=px_nonlinearity)
         elif x_dist == 'linear':
-            l_px = DenseLayer(l_px, n_x, nonlinearity=None)
+            l_px = DenseLayer(l_px, n_c, nonlinearity=None)
 
         # Reshape all the model layers to have the same size
         self.l_x_in = l_x_in
@@ -142,10 +142,10 @@ class RVAE(Model):
         self.l_qz_mu = DimshuffleLayer(l_qz_mu, (0, 'x', 'x', 1))
         self.l_qz_logvar = DimshuffleLayer(l_qz_logvar, (0, 'x', 'x', 1))
 
-        self.l_px = DimshuffleLayer(ReshapeLayer(l_px, (-1, seq_length, self.sym_samples, 1, n_x)), (0, 2, 3, 1, 4))
-        self.l_px_mu = DimshuffleLayer(ReshapeLayer(l_px_mu, (-1, seq_length, self.sym_samples, 1, n_x)), (0, 2, 3, 1, 4)) \
+        self.l_px = DimshuffleLayer(ReshapeLayer(l_px, (-1, n_l, self.sym_samples, 1, n_c)), (0, 2, 3, 1, 4))
+        self.l_px_mu = DimshuffleLayer(ReshapeLayer(l_px_mu, (-1, n_l, self.sym_samples, 1, n_c)), (0, 2, 3, 1, 4)) \
             if x_dist == "gaussian" else None
-        self.l_px_logvar = DimshuffleLayer(ReshapeLayer(l_px_logvar, (-1, seq_length, self.sym_samples, 1, n_x)), (0, 2, 3, 1, 4)) \
+        self.l_px_logvar = DimshuffleLayer(ReshapeLayer(l_px_logvar, (-1, n_l, self.sym_samples, 1, n_c)), (0, 2, 3, 1, 4)) \
             if x_dist == "gaussian" else None
 
         # Predefined functions
