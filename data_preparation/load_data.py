@@ -142,9 +142,9 @@ class LoadHAR(object):
                 t = np.asarray(segmented[:, t_idx, -1]).astype('int')
 
                 # Remove samples without label
-                idx = t != 0
-                segmented = segmented[idx]
-                t = t[idx]
+                # idx = t != 0
+                # segmented = segmented[idx]
+                # t = t[idx]
 
                 # Collect data
                 y = np.concatenate((y, t))
@@ -166,7 +166,8 @@ class LoadHAR(object):
         if self.common_labels:
             y = self.map_to_common_activities(y, activity_map)
         else:
-            y = y - 1
+            # y = y - 1
+            pass
 
         # Save to disk
         # pickle.dump(data, open(data_file,"w"))
