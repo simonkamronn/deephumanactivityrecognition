@@ -7,47 +7,51 @@ from models.rae import RAE
 import matplotlib.pyplot as plt
 from sklearn.cross_validation import train_test_split
 import numpy as np
+from data_preparation.load_data import LoadHAR
 
 
 def run_rae_har():
     seed = np.random.randint(1, 2147462579)
 
-    def sinus_seq(period, samples, length):
-        X = np.linspace(-np.pi*(samples/period), np.pi*(samples/period), samples)
-        X = np.reshape(np.sin(X), (-1, length, 1))
-        X += np.random.randn(*X.shape)*0.1
-        # X = (X - np.min(X))/(np.max(X) - np.min(X))
-        return X, np.ones((samples/length, 1))
-
-    X1, y1 = sinus_seq(40, 100000, 50)
-    X2, y2 = sinus_seq(20, 40000, 50)
-
-    X = np.concatenate((X1, X2)).astype('float32')
-    y = np.concatenate((y1*0, y2*1), axis=0).astype('int')
-
-    dim_samples, dim_sequence, dim_features = X.shape
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
-
-    # X, y, users, stats = har.load()
+    # def sinus_seq(period, samples, length):
+    #     X = np.linspace(-np.pi*(samples/period), np.pi*(samples/period), samples)
+    #     X = np.reshape(np.sin(X), (-1, length, 1))
+    #     X += np.random.randn(*X.shape)*0.1
+    #     # X = (X - np.min(X))/(np.max(X) - np.min(X))
+    #     return X, np.ones((samples/length, 1))
     #
-    # limited_labels = y < 5
-    # y = y[limited_labels]
-    # X = X[limited_labels]
-    # users = users[limited_labels]
+    # X1, y1 = sinus_seq(40, 100000, 50)
+    # X2, y2 = sinus_seq(20, 40000, 50)
     #
-    # # Compress labels
-    # for idx, label in enumerate(np.unique(y)):
-    #     if not np.equal(idx, label):
-    #         y[y == label] = idx
-    #
-    # y_unique = np.unique(y)
-    # y = one_hot(y, len(y_unique))
+    # X = np.concatenate((X1, X2)).astype('float32')
+    # y = np.concatenate((y1*0, y2*1), axis=0).astype('int')
     #
     # dim_samples, dim_sequence, dim_features = X.shape
-    # num_classes = len(y_unique)
-    #
-    # # Split into train and test stratified by users
-    # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=users)
+    # X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
+
+    n_samples, step = 50, 50
+    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
+                        step=step, normalize='segments', comp_magnitude=False, simple_labels=False, common_labels=False)
+    X, y, name, users, stats = load_data.uci_hapt()
+
+    limited_labels = y < 18
+    y = y[limited_labels]
+    X = X[limited_labels].astype(np.float32)
+    users = users[limited_labels]
+
+    # Compress labels
+    for idx, label in enumerate(np.unique(y)):
+        if not np.equal(idx, label):
+            y[y == label] = idx
+
+    y_unique = np.unique(y)
+    y = one_hot(y, len(y_unique))
+
+    dim_samples, dim_sequence, dim_features = X.shape
+    num_classes = len(y_unique)
+
+    # Split into train and test stratified by users
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=np.argmax(y, axis=1))
 
     # Combine in sets
     train_set = (X_train, y_train)
@@ -73,17 +77,17 @@ def run_rae_har():
 
     def custom_evaluation(model, path):
         plt.clf()
-        f, axarr = plt.subplots(nrows=len(np.unique(y)), ncols=1)
+        f, axarr = plt.subplots(nrows=num_classes, ncols=1)
         for idx, y_l in enumerate(np.unique(y)):
             act_idx = test_set[1] == y_l
             test_act = test_set[0][act_idx[:, 0]]
 
             xhat = model.f_px(test_act)
 
-            axarr[idx].plot(test_act[:3].reshape(-1, dim_features), color='red')
-            axarr[idx].plot(xhat[:3].reshape(-1, dim_features), color='blue', linestyle='dotted')
+            axarr[idx].plot(test_act[:2].reshape(-1, dim_features), color='red')
+            axarr[idx].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted')
 
-        f.set_size_inches(8, 5)
+        f.set_size_inches(12, 3*num_classes)
         f.savefig(path, dpi=100, format='png')
         plt.close(f)
 

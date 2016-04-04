@@ -39,9 +39,9 @@ def main():
 
     # X, y, users, stats = har.load()
     #
-    n_samples, step = 25, 25
+    n_samples, step = 50, 50
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
-                        step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
+                        step=step, normalize='segments', comp_magnitude=False, simple_labels=False, common_labels=False)
     X, y, name, users, stats = load_data.uci_hapt()
 
     limited_labels = y < 18
@@ -57,13 +57,13 @@ def main():
             y[y == label] = idx
 
     y_unique = np.unique(y)
-    y = one_hot(y, len(y_unique))
     num_classes = len(y_unique)
+    y = one_hot(y, num_classes)
 
     # Split into train and test stratified by users
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=1000, stratify=users)
 
-    n_samples = 1000
+    n_samples = 1001
     # Split training into labelled and unlabelled. Optionally stratified by the label
     X_train_labeled, X_train_unlabeled, y_train_labeled, y_train_unlabeled = \
         train_test_split(X_train, y_train, train_size=n_samples, stratify=np.argmax(y_train, axis=1))

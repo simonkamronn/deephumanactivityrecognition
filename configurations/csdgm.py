@@ -40,7 +40,7 @@ def main():
                         step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
     X, y, name, users, stats = load_data.uci_hapt()
 
-    limited_labels = y < 4
+    limited_labels = y < 3
     y = y[limited_labels]
     X = X[limited_labels].astype(np.float32)
     users = users[limited_labels]
@@ -59,7 +59,7 @@ def main():
     # Split into train and test stratified by users
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=500, stratify=users)
 
-    n_samples = 100
+    n_samples = 1000
     # Split training into labelled and unlabelled. Optionally stratified by the label
     X_train_labeled, X_train_unlabeled, y_train_labeled, y_train_unlabeled = \
         train_test_split(X_train, y_train, train_size=n_samples, stratify=np.argmax(y_train, axis=1))

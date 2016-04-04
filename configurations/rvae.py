@@ -42,12 +42,12 @@ def run_vrae_har():
     # HAR data
     # X, y, users, stats = har.load()
 
-    n_samples, step = 25, 25
+    n_samples, step = 50, 50
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
-                        step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
+                        step=step, normalize='segments', comp_magnitude=False, simple_labels=False, common_labels=False)
     X, y, name, users, stats = load_data.uci_hapt()
 
-    limited_labels = y < 4
+    limited_labels = y < 18
     y = y[limited_labels]
     X = X[limited_labels].astype(np.float32)
     users = users[limited_labels]
@@ -99,13 +99,12 @@ def run_vrae_har():
     train_args['inputs']['samples'] = 1
     train_args['inputs']['warmup'] = 1.1
 
-    y_test = np.argmax(test_set[1], axis=1)
     def custom_evaluation(model, path):
         # Get model output
         x_ = test_set[0]
         y_ = test_set[1]
 
-        qz = model.f_qz(x_, y_, 1)
+        qz = model.f_qz(x_, 1)
         px = model.f_px(x_, qz, 1)
         px_mu = model.f_mu(x_, qz, 1)
         px_var = np.exp(model.f_var(x_, qz, 1))
@@ -114,7 +113,7 @@ def run_vrae_har():
         y_ = np.argmax(y_, axis=1)
 
         plt.clf()
-        f, axarr = plt.subplots(nrows=len(y_unique), ncols=2)
+        f, axarr = plt.subplots(nrows=num_classes, ncols=2)
         for idx, y_l in enumerate(y_unique):
             l_idx = y_ == y_l
 
@@ -124,7 +123,7 @@ def run_vrae_har():
             axarr[idx, 1].plot(px_var[l_idx][:2].reshape(-1, n_c), label="var")
             plt.legend()
 
-        f.set_size_inches(12, 8)
+        f.set_size_inches(12, num_classes*3)
         f.savefig(path, dpi=100, format='png')
         plt.close(f)
 
