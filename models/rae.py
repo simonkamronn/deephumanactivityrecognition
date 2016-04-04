@@ -18,20 +18,20 @@ class RAE(Model):
     Implementation of variational recurrent auto-encoder.
     """
 
-    def __init__(self, n_x, px_hid, enc_rnn=256, dec_rnn=256, seq_length=28,
+    def __init__(self, n_c, px_hid, enc_rnn=256, dec_rnn=256, n_l=50,
                  nonlinearity=rectify, batchnorm=False, seed=1234):
         """
         Weights are initialized using the Bengio and Glorot (2010) initialization scheme.
-        :param n_x: Number of inputs.
+        :param n_c: Number of inputs.
         :param px_hid: List of number of deterministic hidden p(a|z,y) & p(x|z,y).
         :param nonlinearity: The transfer function used in the deterministic layers.
         :param x_dist: The x distribution, 'bernoulli', 'multinomial', or 'gaussian'.
         :param batchnorm: Boolean value for batch normalization.
         :param seed: The random seed.
         """
-        super(RAE, self).__init__(n_x, px_hid, enc_rnn, nonlinearity)
-        self.n_x = n_x
-        self.max_seq_length = seq_length
+        super(RAE, self).__init__(n_c, px_hid, enc_rnn, nonlinearity)
+        self.n_x = n_c
+        self.max_seq_length = n_l
         self.batchnorm = batchnorm
         self._srng = RandomStreams(seed)
 
@@ -73,14 +73,14 @@ class RAE(Model):
             return lstm
 
         # RNN encoder implementation
-        l_x_in = InputLayer((None, None, n_x))
+        l_x_in = InputLayer((None, None, n_c))
         l_enc_forward = lstm_layer(l_x_in, enc_rnn, return_final=True, backwards=False, name='enc_forward')
         l_enc_backward = lstm_layer(l_x_in, enc_rnn, return_final=True, backwards=True, name='enc_backward')
         l_enc_concat = ConcatLayer([l_enc_forward, l_enc_backward], axis=-1)
         l_enc = dense_layer(l_enc_concat, enc_rnn)
 
         # RNN decoder implementation
-        l_dec_repeat = RepeatLayer(l_enc, n=seq_length)
+        l_dec_repeat = RepeatLayer(l_enc, n=n_l)
         l_dec_forward = lstm_layer(l_dec_repeat, dec_rnn, return_final=False, backwards=False, name='dec_forward')
         l_dec_backward = lstm_layer(l_dec_repeat, dec_rnn, return_final=False, backwards=True, name='dec_backward')
         l_dec_concat = ConcatLayer([l_dec_forward, l_dec_backward], axis=-1)
@@ -93,8 +93,8 @@ class RAE(Model):
             l_px = dense_layer(l_px, hid)
 
         # Output
-        l_px = DenseLayer(l_px, n_x, nonlinearity=None)
-        self.l_px = ReshapeLayer(l_px, (-1, seq_length, n_x))
+        l_px = DenseLayer(l_px, n_c, nonlinearity=None)
+        self.l_px = ReshapeLayer(l_px, (-1, n_l, n_c))
         self.l_x_in = l_x_in
 
         inputs = {l_x_in: self.sym_x}

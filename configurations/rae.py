@@ -29,7 +29,7 @@ def run_rae_har():
     # dim_samples, dim_sequence, dim_features = X.shape
     # X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.8)
 
-    n_samples, step = 50, 50
+    n_samples, step = 50, 25
     load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
                         step=step, normalize='segments', comp_magnitude=False, simple_labels=False, common_labels=False)
     X, y, name, users, stats = load_data.uci_hapt()
@@ -46,8 +46,6 @@ def run_rae_har():
 
     y_unique = np.unique(y)
     y = one_hot(y, len(y_unique))
-
-    dim_samples, dim_sequence, dim_features = X.shape
     num_classes = len(y_unique)
 
     # Split into train and test stratified by users
@@ -59,12 +57,12 @@ def run_rae_har():
     print('Train size: ', train_set[0].shape)
     print('Test size: ', test_set[0].shape)
 
-    n, seq, n_x = train_set[0].shape  # Datapoints in the dataset, input features.
+    n, n_l, n_c = train_set[0].shape  # Datapoints in the dataset, input features.
     n_batches = n / 100  # The number of batches.
     bs = n / n_batches  # The batchsize.
 
     # Initialize the auxiliary deep generative model.
-    model = RAE(n_x=int(n_x), px_hid=[128], enc_rnn=128, dec_rnn=128, seq_length=int(seq),
+    model = RAE(n_c=int(n_c), n_l=int(n_l), px_hid=[256], enc_rnn=256, dec_rnn=256,
                 nonlinearity=rectify, batchnorm=False)
 
     # Get the training functions.
@@ -76,16 +74,21 @@ def run_rae_har():
     train_args['inputs']['beta2'] = 0.999
 
     def custom_evaluation(model, path):
+        # Get model output
+        x_ = test_set[0]
+        y_ = test_set[1]
+        xhat = model.f_px(x_)
+
+        # reduce y to integers
+        y_ = np.argmax(y_, axis=1)
+
         plt.clf()
         f, axarr = plt.subplots(nrows=num_classes, ncols=1)
-        for idx, y_l in enumerate(np.unique(y)):
-            act_idx = test_set[1] == y_l
-            test_act = test_set[0][act_idx[:, 0]]
+        for idx, y_l in enumerate(num_classes):
+            l_idx = y_ == y_l
 
-            xhat = model.f_px(test_act)
-
-            axarr[idx].plot(test_act[:2].reshape(-1, dim_features), color='red')
-            axarr[idx].plot(xhat[:2].reshape(-1, dim_features), color='blue', linestyle='dotted')
+            axarr[idx].plot(x_[l_idx][:2].reshape(-1, n_c), color='red')
+            axarr[idx].plot(xhat[l_idx][:2].reshape(-1, n_c), color='blue', linestyle='dotted')
 
         f.set_size_inches(12, 3*num_classes)
         f.savefig(path, dpi=100, format='png')
