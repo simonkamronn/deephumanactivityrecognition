@@ -11,72 +11,88 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 plt.ioff()
+from data_loaders.data_helper import one_hot
+from sklearn.cross_validation import train_test_split
+from utils import copy_script, image_to_movie
+
 
 def main():
     n_samples, step = 50, 25
-    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, lowpass=10, diff=False,
-                        step=step, normalize='segments', comp_magnitude=True, simple_labels=False, common_labels=False)
-
+    load_data = LoadHAR(add_pitch=False, add_roll=False, add_filter=False, n_samples=n_samples, diff=False,
+                        step=step, normalize='segments', comp_magnitude=False, simple_labels=False, common_labels=False)
     X, y, name, users, stats = load_data.uci_hapt()
-    users = ['%s%02d' % (name, user) for user in users]
-    limited_labels = y < 6  # No transitions
+
+    limited_labels = y < 18
     y = y[limited_labels]
-    X = X[limited_labels].astype('float32')
-    users = np.char.asarray(users)[limited_labels]
+    X = X[limited_labels].astype(np.float32)
+    users = users[limited_labels]
+
+    # Compress labels
+    for idx, label in enumerate(np.unique(y)):
+        if not np.equal(idx, label):
+            y[y == label] = idx
+
     y_unique = np.unique(y)
+    y = one_hot(y, len(y_unique))
+    num_classes = len(y_unique)
 
-    cv = StratifiedShuffleSplit(y, n_iter=1, test_size=0.1, random_state=0)
-    for (train_index, test_index) in cv:
-        x_train, x_test = X[train_index], X[test_index]
-        y_train, y_test = y[train_index], y[test_index]
-    n_win, n_samples, n_features = x_train.shape
+    # Split into train and test stratified by users
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, stratify=np.argmax(y, axis=1))
 
-    train_set = (x_train, y_train)
-    test_set = (x_test, y_test)
+    # Combine in sets
+    train_set = (X_train, y_train)
+    test_set = (X_test, y_test)
     print('Train size: ', train_set[0].shape)
     print('Test size: ', test_set[0].shape)
 
-    n_train = train_set[0].shape[0]
-    n_test = test_set[0].shape[0]
-    batch_size = 64
+    n, n_l, n_c = train_set[0].shape  # Datapoints in the dataset, input features.
+    n_batches = n / 100  # The number of batches.
+    bs = n / n_batches  # The batchsize.
 
-    n_test_batches = n_test//batch_size
-    n_train_batches = n_train//batch_size
-
-    model = CAE(n_in=(int(n_samples), int(n_features)),
+    model = CAE(n_in=(int(n_l), int(n_c)),
                 filters=[8, 16, 32, 64],
                 n_hidden=64,
                 n_out=n_samples,
                 trans_func=leaky_rectify,
                 stats=0)
 
+    # Copy script to output folder
+    copy_script(__file__, model)
+
     # Build model
     f_train, f_test, f_validate, train_args, test_args, validate_args = model.build_model(train_set,
                                                                                           test_set,
                                                                                           None)
 
-    def f_custom(model, path):
+    def custom_evaluation(model, path):
+        # Get model output
+        x_ = test_set[0]
+        y_ = test_set[1]
+        xhat = model.f_px(x_)
+
+        # reduce y to integers
+        y_ = np.argmax(y_, axis=1)
+
         plt.clf()
-        f, axarr = plt.subplots(nrows=len(y_unique), ncols=1)
-
+        f, axarr = plt.subplots(nrows=num_classes, ncols=n_c)
         for idx, y_l in enumerate(y_unique):
-            act_idx = y_test == y_l
-            test_act = test_set[0][act_idx]
-            out = model.get_output(test_act).eval()
+            l_idx = y_ == y_l
 
-            axarr[idx].plot(test_act[0], color='red')
-            axarr[idx].plot(out[0], color='blue', linestyle='dotted')
+            for c in range(n_c):
+                axarr[idx, c].plot(x_[l_idx, :, c][:2].reshape(-1), color='red')
+                axarr[idx, c].plot(xhat[l_idx, :, c][:2].reshape(-1), color='blue', linestyle='dotted')
 
-        f.set_size_inches(12, 20)
-        f.savefig(path, dpi=100)
+        f.set_size_inches(12, 3*num_classes)
+        f.savefig(path, dpi=100, format='png')
         plt.close(f)
 
-    train = TrainModel(model=model,
-                       anneal_lr=0.75,
-                       anneal_lr_freq=100,
-                       output_freq=1,
-                       pickle_f_custom_freq=100,
-                       f_custom_eval=f_custom)
+    train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=10, f_custom_eval=custom_evaluation)
+    train.train_model(f_train, train_args,
+                      f_test, test_args,
+                      f_validate, validate_args,
+                      n_train_batches=n_batches,
+                      n_epochs=10000,
+                      anneal=[("learningrate", 100, 0.75, 3e-5)])
     train.pickle = False
 
     train.write_to_logger("Normalizing: %s" % load_data.normalize)
@@ -90,24 +106,17 @@ def main():
     train.write_to_logger("Add filter separated signals: %s" % load_data.add_filter)
     train.write_to_logger("Differentiate: %s" % load_data.differentiate)
 
-    test_args['inputs']['batchsize'] = batch_size
-    train_args['inputs']['batchsize'] = batch_size
-    train_args['inputs']['learningrate'] = 0.003
+    train_args['inputs']['batchsize'] = 100
+    train_args['inputs']['learningrate'] = 1e-3
     train_args['inputs']['beta1'] = 0.9
-    train_args['inputs']['beta2'] = 1e-6
-    validate_args['inputs']['batchsize'] = batch_size
+    train_args['inputs']['beta2'] = 0.999
 
     train.train_model(f_train, train_args,
                       f_test, test_args,
                       f_validate, validate_args,
-                      n_train_batches=n_train_batches,
-                      n_test_batches=n_test_batches,
-                      n_epochs=2000)
-
-    # Copy script to output folder
-    scriptpath = path.realpath(__file__)
-    filename = path.basename(scriptpath)
-    shutil.copy(scriptpath, model.root_path + '/' + filename)
+                      n_train_batches=n_batches,
+                      n_epochs=2000,
+                      anneal=[("learningrate", 100, 0.75, 3e-5)])
 
 if __name__ == "__main__":
     main()

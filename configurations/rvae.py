@@ -113,17 +113,18 @@ def run_vrae_har():
         y_ = np.argmax(y_, axis=1)
 
         plt.clf()
-        f, axarr = plt.subplots(nrows=num_classes, ncols=2)
+        f, axarr = plt.subplots(nrows=num_classes, ncols=n_c*2)
         for idx, y_l in enumerate(y_unique):
             l_idx = y_ == y_l
 
-            axarr[idx, 0].plot(x_[l_idx][:2].reshape(-1, n_c))
-            axarr[idx, 0].plot(px[l_idx][:2].reshape(-1, n_c), linestyle='dotted')
-            axarr[idx, 1].plot(px_mu[l_idx][:2].reshape(-1, n_c), label="mu")
-            axarr[idx, 1].plot(px_var[l_idx][:2].reshape(-1, n_c), label="var")
+            for c in range(n_c):
+                axarr[idx, c*2].plot(x_[l_idx][:2].reshape(-1, n_c))
+                axarr[idx, c*2].plot(px[l_idx][:2].reshape(-1, n_c), linestyle='dotted')
+                axarr[idx, c*2 + 1].plot(px_mu[l_idx][:2].reshape(-1, n_c), label="mu")
+                axarr[idx, c*2 + 1].plot(px_var[l_idx][:2].reshape(-1, n_c), label="var")
             plt.legend()
 
-        f.set_size_inches(12, num_classes*3)
+        f.set_size_inches(20, num_classes*3)
         f.savefig(path, dpi=100, format='png')
         plt.close(f)
 
@@ -140,6 +141,9 @@ def run_vrae_har():
         plt.savefig(path.replace('custom_eval_plot', 'pca/z'))
         plt.close()
 
+    def anneal_func(input):
+        return input - 0.01
+
     # Define training loop. Output training evaluations every 1 epoch
     # and the custom evaluation method every 10 epochs.
     train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=10, f_custom_eval=custom_evaluation)
@@ -152,7 +156,7 @@ def run_vrae_har():
                       # Any symbolic model variable can be annealed during
                       # training with a tuple of (var_name, every, scale constant, minimum value).
                       anneal=[("learningrate", 100, 0.75, 3e-5),
-                              ("warmup", 1, 0.99, 0.1)])
+                              ("warmup", 1, anneal_func, 0.1)])
 
     image_to_movie.create(model.get_root_path() + '/training custom evals', rate=3)
 
