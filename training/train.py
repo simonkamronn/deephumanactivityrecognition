@@ -22,8 +22,9 @@ class TrainModel(Train):
         if anneal is not None:
             for t in anneal:
                 key, freq, rate, min_val = t
-                self.write_to_logger(
-                    "Anneal %s %0.4f after %i epochs with minimum value %f." % (key, rate, int(freq), min_val))
+                if isinstance(rate, int) or isinstance(rate, float):
+                    self.write_to_logger(
+                        "Anneal %s %0.4f after %i epochs with minimum value %f." % (key, rate, int(freq), min_val))
 
         self.write_to_logger("### TRAINING MODEL ###")
 
