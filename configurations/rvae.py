@@ -80,7 +80,7 @@ def run_vrae_har():
     bs = n / n_batches  # The batchsize.
 
     # Initialize the auxiliary deep generative model.
-    model = RVAE(n_c=n_c, n_z=128, qz_hid=[256, 256], px_hid=[256, 256], enc_rnn=256, dec_rnn=256, n_l=n_l,
+    model = RVAE(n_c=n_c, n_z=256, qz_hid=[256, 256], px_hid=[256, 256], enc_rnn=256, dec_rnn=256, n_l=n_l,
                  nonlinearity=rectify, batchnorm=False, x_dist='gaussian', px_nonlinearity=None)
 
     # Copy script to output folder
