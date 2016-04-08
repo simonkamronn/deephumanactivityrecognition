@@ -1,7 +1,7 @@
 import theano
 theano.config.floatX = 'float32'
 import theano.tensor as T
-from base import Model
+from .base import Model
 from lasagne_extensions.nonlinearities import rectify, softmax
 from lasagne.layers import get_output, DenseLayer, DropoutLayer, InputLayer, \
     ReshapeLayer, DimshuffleLayer, get_all_params, Conv2DLayer, Pool2DLayer, GlobalPoolLayer, \

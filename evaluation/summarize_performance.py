@@ -1,6 +1,6 @@
 import os
 import sys
-import cPickle as pkl
+import pickle as pkl
 import numpy as np
 from datetime import datetime
 import re
@@ -44,10 +44,10 @@ def cv_lookup(today_only=False, dataset='', print_out=True, model=''):
         test_file = model_directory + '/' + sub_dir + '/training evaluations/evaluationtest_dict.pkl'
         train_file = model_directory + '/' + sub_dir + '/training evaluations/evaluationtrain_dict.pkl'
         if os.path.exists(validation_file) and all(x in sub_dir for x in ['cv', dataset, model]):
-            validations = np.asarray(pkl.load(open(validation_file, "rb")).values())
+            validations = np.asarray(list(pkl.load(open(validation_file, "rb")).values()))
             if validations.shape[1] < 2:
-                validations = np.asarray(pkl.load(open(test_file, "rb")).values())
-            training_accuracy = np.asarray(pkl.load(open(train_file, "rb")).values())
+                validations = np.asarray(list(pkl.load(open(test_file, "rb")).values()))
+            training_accuracy = np.asarray(list(pkl.load(open(train_file, "rb")).values()))
 
             if today_only and not datetime.fromtimestamp(os.path.getctime(validation_file)) > time_midnight:
                 pass
@@ -117,9 +117,9 @@ def single_lookup(today_only=False, dataset='', print_out=True):
             else:
                 model_id, model_name, net_size, n_in, classes = \
                     re.search('_([0-9]*)_(\w*\W*)_(.*)_(.*)_([0-9]*)', sub_dir).groups()
-                validations = np.asarray(pkl.load(open(validation_file, "rb")).values())
+                validations = np.asarray(list(pkl.load(open(validation_file, "rb")).values()))
                 if validations.shape[1] < 2:
-                    validations = np.asarray(pkl.load(open(test_file, "rb")).values())
+                    validations = np.asarray(list(pkl.load(open(test_file, "rb")).values()))
                 d['accuracy'].append(np.max(validations[:, -1]))
                 d['index'].append(np.argmax(validations[:, -1]))
                 d['test error'].append(validations[d['index'][-1], 0])

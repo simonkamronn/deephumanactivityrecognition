@@ -3,7 +3,7 @@ __author__ = 'larsma'
 import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
-from base import Model
+from .base import Model
 from lasagne_extensions.objectives import binary_crossentropy
 from lasagne_extensions.nonlinearities import sigmoid
 from lasagne_extensions.updates import sgd

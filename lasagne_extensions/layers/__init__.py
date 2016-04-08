@@ -5,4 +5,4 @@ from .mean_layer import *
 from lasagne.layers import *
 from parmesan.layers import *
 from .constrainlayer import *
-from tieddropoutlayer import *
+from .tieddropoutlayer import *

@@ -2,7 +2,7 @@ import theano
 theano.config.floatX = 'float32'
 import theano.tensor as T
 import lasagne
-from base import Model
+from .base import Model
 from lasagne_extensions.nonlinearities import rectify, softmax, sigmoid
 from lasagne.objectives import aggregate, squared_error
 from lasagne.layers import *

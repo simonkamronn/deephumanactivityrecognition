@@ -1,5 +1,5 @@
 import os
-import cPickle as pkl
+import pickle as pkl
 import numpy as np
 
 
@@ -13,7 +13,7 @@ sub_dirs = sorted(os.listdir(model_directory))
 for sub_dir in sub_dirs:
     validation_file = model_directory + '/' + sub_dir + '/training evaluations/evaluationvalidation_dict.pkl'
     if os.path.isfile(validation_file):
-        validations = np.asarray(pkl.load(open(validation_file, "rb")).values())
+        validations = np.asarray(list(pkl.load(open(validation_file, "rb")).values()))
         best_accuracy = np.max(validations[:, 1])
         if best_accuracy > np.min(best_validation_accuracies):
             best_validation_accuracies[0] = best_accuracy

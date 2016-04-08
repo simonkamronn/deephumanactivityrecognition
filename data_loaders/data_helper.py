@@ -10,7 +10,7 @@ def pad_targets(xy):
     x, y = xy
     classes = np.max(y) + 1
     tmp_data_y = np.zeros((x.shape[0], classes))
-    for i, dp in zip(range(len(y)), y):
+    for i, dp in zip(list(range(len(y))), y):
         r = np.zeros(classes)
         r[dp] = 1
         tmp_data_y[i] = r
@@ -66,7 +66,7 @@ def create_semi_supervised(xy, n_labeled, rng):
     y_labeled = [0] * n_classes
     y_unlabeled = [0] * n_classes
     for i in range(n_classes):
-        idx = range(x[i].shape[1])
+        idx = list(range(x[i].shape[1]))
         rng.shuffle(idx)
         x_labeled[i] = x[i][:, idx[:n_labels_per_class]]
         y_labeled[i] = y[i][:, idx[:n_labels_per_class]]
@@ -91,5 +91,5 @@ def one_hot(labels, n_classes=None):
         n_classes = labels.max() + 1
 
     m = np.zeros((labels.shape[0], n_classes)).astype(bool)
-    m[range(labels.shape[0]), labels] = True
+    m[list(range(labels.shape[0])), labels] = True
     return m

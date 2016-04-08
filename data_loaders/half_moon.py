@@ -1,6 +1,6 @@
 from sklearn.datasets import make_moons
 import numpy as np
-from data_helper import pad_targets
+from .data_helper import pad_targets
 
 
 def _download():

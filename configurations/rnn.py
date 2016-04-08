@@ -1,6 +1,6 @@
 from os import rmdir
 from lasagne.nonlinearities import rectify, softmax
-from base import ModelConfiguration
+from .base import ModelConfiguration
 from data_preparation.load_data import LoadHAR
 from models.rnn import RNN
 from training.train import TrainModel

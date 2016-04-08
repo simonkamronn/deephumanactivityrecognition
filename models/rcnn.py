@@ -1,14 +1,14 @@
 import theano
 theano.config.floatX = 'float32'
 import theano.tensor as T
-from base import Model
+from .base import Model
 from lasagne_extensions.nonlinearities import rectify, softmax, leaky_rectify
 from lasagne.layers import get_output, get_output_shape, DenseLayer, DropoutLayer, InputLayer, FeaturePoolLayer, \
     ReshapeLayer, DimshuffleLayer, get_all_params, Conv2DLayer, Pool2DLayer, GlobalPoolLayer, SliceLayer, ConcatLayer, \
     GaussianNoiseLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
 from lasagne_extensions.updates import adam, rmsprop, nesterov_momentum
-from modules import RecurrentConvLayer, BatchNormalizeLayer
+from .modules import RecurrentConvLayer, BatchNormalizeLayer
 from lasagne_extensions.layers import TiedDropoutLayer
 
 

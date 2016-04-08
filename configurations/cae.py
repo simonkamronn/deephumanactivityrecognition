@@ -106,7 +106,7 @@ def main():
     train.train_model(f_train, train_args,
                       f_test, test_args,
                       f_validate, validate_args,
-                      n_train_batches=n_batches,
+                      n_train_batches=int(n_batches),
                       n_epochs=2000,
                       anneal=[("learningrate", 100, 0.75, 3e-5)])
 

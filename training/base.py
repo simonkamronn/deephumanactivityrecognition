@@ -7,7 +7,7 @@ plt.ioff()
 from utils import env_paths as paths
 import seaborn as sns
 import numpy as np
-import cPickle as pkl
+import pickle as pkl
 
 
 class Train(object):
@@ -63,14 +63,14 @@ class Train(object):
 
         plt.clf()
         plt.subplot(211)
-        idx = np.array(eval_dict.values()[0]).shape[0]
-        x = np.array(eval_dict.values())
+        idx = np.array(list(eval_dict.values())[0]).shape[0]
+        x = np.array(list(eval_dict.values()))
         for i in range(idx):
-            plot(eval_dict.keys(), x[:, i], False, labels[i])
+            plot(list(eval_dict.keys()), x[:, i], False, labels[i])
         plt.legend()
         plt.subplot(212)
         for i in range(idx):
-            plot(eval_dict.keys()[-int(len(x) * 0.25):], x[-int(len(x) * 0.25):][:, i], True, labels[i])
+            plot(list(eval_dict.keys())[-int(len(x) * 0.25):], x[-int(len(x) * 0.25):][:, i], True, labels[i])
         plt.xlabel('Epochs')
         plt.savefig(paths.get_plot_evaluation_path_for_model(self.model.get_root_path(), path_extension+".png"))
 

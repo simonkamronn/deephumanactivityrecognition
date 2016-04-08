@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 """
 Based on implementation from Lane, 2015, Can Deep Learning Revolutionize Mobile Sensing ?
 """

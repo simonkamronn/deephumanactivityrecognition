@@ -2,7 +2,7 @@ import os
 import numpy as np
 from utils import env_paths
 from parmesan.datasets import load_mnist_realval
-from data_helper import create_semi_supervised, pad_targets
+from .data_helper import create_semi_supervised, pad_targets
 
 
 def _download():

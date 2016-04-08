@@ -1,7 +1,7 @@
 import theano
 theano.config.floatX = 'float32'
 import theano.tensor as T
-from base import Model
+from .base import Model
 from lasagne_extensions.nonlinearities import rectify, softmax
 from lasagne.layers import get_output, get_output_shape, DenseLayer, InputLayer, ConcatLayer, \
     ReshapeLayer, DimshuffleLayer, get_all_params, Conv2DLayer, Pool2DLayer, GlobalPoolLayer, \
@@ -10,7 +10,7 @@ from lasagne.objectives import aggregate, categorical_crossentropy, categorical_
 # from lasagne.layers.dnn import Conv2DDNNLayer as
 # from lasagne.layers.dnn import Pool2DDNNLayer as
 from lasagne_extensions.updates import adam, rmsprop, nesterov_momentum
-from modules import ResidualModule, BatchNormalizeLayer
+from .modules import ResidualModule, BatchNormalizeLayer
 from lasagne_extensions.layers import TiedDropoutLayer
 
 

@@ -14,7 +14,6 @@ from scipy.io import loadmat
 from scipy.signal import resample
 import itertools
 from utils.har_utils import roll, pitch, expand_target, split_signal, magnitude, rolling_window, lowpass_filter
-import cPickle as pickle
 
 ACTIVITY_MAP = {0: 'WALKING', 1: 'CYCLING', 2: 'RUNNING', 3: 'STAIRS', 4: 'JOGGING', 5: 'LAYING',
                 6: 'WALKING_UPSTAIRS',7: 'WALKING_DOWNSTAIRS', 8: 'BEND_FORWARD',
@@ -22,12 +21,12 @@ ACTIVITY_MAP = {0: 'WALKING', 1: 'CYCLING', 2: 'RUNNING', 3: 'STAIRS', 4: 'JOGGI
                 16: 'UPRIGHT_INACTIVE', 17: 'INACTIVE',
                 18: 'STAND_TO_SIT', 19: 'SIT_TO_STAND', 20: 'SIT_TO_LIE', 21: 'LIE_TO_SIT', 22: 'STAND_TO_LIE',
                 23: 'LIE_TO_STAND', 24: 'TRANSITION'}
-MAP_ACTIVITY = dict((v, k) for k, v in ACTIVITY_MAP.iteritems())
+MAP_ACTIVITY = dict((v, k) for k, v in list(ACTIVITY_MAP.items()))
 SR = 50
 
 # Path to HAR data
-if 'nt' in os.name:
-    ROOT_FOLDER = 'D:/PhD/Data/activity/'
+if os.environ.get('DEV_ENVIRONMENT') == 'local' :
+    ROOT_FOLDER = '/home/sdka/phd/data/activity/'
 else:
     ROOT_FOLDER = '/nobackup/titans/sdka/data/activity/'
 
@@ -80,76 +79,75 @@ class LoadHAR(object):
             activity_map = {1: 'WALKING', 2: 'STAIRS', 3: 'STAIRS', 4: 'INACTIVE',
                             5: 'INACTIVE', 6: 'INACTIVE', 7: 'TRANSITION', 8: 'TRANSITION',
                             9: 'TRANSITION', 10: 'TRANSITION', 11: 'TRANSITION', 12: 'TRANSITION'}
-        if os.path.isfile(data_file):
-            data = pickle.load(open(data_file, 'r'))
-        else:
-            files = sorted(glob.glob(self.root_folder + subfolder + 'acc_*'))
-            labels = pd.read_csv(self.root_folder + subfolder +'/labels.txt',
-                                 names=['exp', 'user', 'activity', 'start', 'end'],
-                                 header=None, sep=' ')
 
-            # Extract signals from the files and split them into segments. UCI HAR V1 uses 128 window length with
-            # a step size of 64
-            data_array = np.empty((0, self.n_samples, 3))
-            y = np.empty((0))
-            users = np.empty((0))
+        # Load files
+        files = sorted(glob.glob(self.root_folder + subfolder + 'acc_*'))
+        labels = pd.read_csv(self.root_folder + subfolder +'labels.txt',
+                             names=['exp', 'user', 'activity', 'start', 'end'],
+                             header=None, sep=' ')
 
-            # for exp, user in labels[['exp', 'user']].drop_duplicates().values:
-            #     print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
-            #     values = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ').values
-            #     idx = ((labels['exp']==exp) & (labels['user']==user))
-            #
-            #     for activity, start, end in labels[['activity', 'start', 'end']][idx].values:
-            #         segment = values[start:end]
-            #
-            #         # Pad a segment to a multiple of n_samples
-            #         if segment.shape[0] <= self.n_samples:
-            #             pad_width = int(np.ceil(segment.shape[0]/float(self.n_samples))*self.n_samples - segment.shape[0])
-            #             segment = np.pad(segment, ((0, pad_width), (0, 0)), 'edge').reshape(1, self.n_samples, 3)
-            #
-            #         # Segment with a rolling window allowing overlap
-            #         else:
-            #             try:
-            #                 segment = rolling_window(segment, (self.n_samples, 0), self.step).swapaxes(1, 2)
-            #             except ValueError, e:
-            #                 print(e)
-            #                 print(segment.shape)
-            #
-            #         # Collect data
-            #         data_array = np.concatenate((data_array, segment))
-            #         y = np.concatenate((y, [activity]*segment.shape[0]))
-            #         users = np.concatenate((users, [(user)]*segment.shape[0]))
-            for exp, user in labels[['exp', 'user']].drop_duplicates().values:
-                print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
-                df = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ')
-                idx = ((labels['exp']==exp) & (labels['user']==user))
+        # Extract signals from the files and split them into segments. UCI HAR V1 uses 128 window length with
+        # a step size of 64
+        data_array = np.empty((0, self.n_samples, 3))
+        y = np.empty((0))
+        users = np.empty((0))
 
-                values = df.values
-                activities = np.zeros((values.shape[0], 1))
-                for activity, start, end in labels[['activity', 'start', 'end']][idx].values:
-                    activities[start:end] = activity
+        # for exp, user in labels[['exp', 'user']].drop_duplicates().values:
+        #     print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
+        #     values = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ').values
+        #     idx = ((labels['exp']==exp) & (labels['user']==user))
+        #
+        #     for activity, start, end in labels[['activity', 'start', 'end']][idx].values:
+        #         segment = values[start:end]
+        #
+        #         # Pad a segment to a multiple of n_samples
+        #         if segment.shape[0] <= self.n_samples:
+        #             pad_width = int(np.ceil(segment.shape[0]/float(self.n_samples))*self.n_samples - segment.shape[0])
+        #             segment = np.pad(segment, ((0, pad_width), (0, 0)), 'edge').reshape(1, self.n_samples, 3)
+        #
+        #         # Segment with a rolling window allowing overlap
+        #         else:
+        #             try:
+        #                 segment = rolling_window(segment, (self.n_samples, 0), self.step).swapaxes(1, 2)
+        #             except ValueError, e:
+        #                 print(e)
+        #                 print(segment.shape)
+        #
+        #         # Collect data
+        #         data_array = np.concatenate((data_array, segment))
+        #         y = np.concatenate((y, [activity]*segment.shape[0]))
+        #         users = np.concatenate((users, [(user)]*segment.shape[0]))
+        for exp, user in labels[['exp', 'user']].drop_duplicates().values:
+            print("Loading %s" % self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user))
+            df = pd.read_csv(self.root_folder + subfolder + 'acc_exp%02d_user%02d.txt' % (exp, user), sep=' ')
+            idx = ((labels['exp']==exp) & (labels['user']==user))
 
-                values = np.concatenate((values, activities), axis=1)
+            values = df.values
+            activities = np.zeros((values.shape[0], 1))
+            for activity, start, end in labels[['activity', 'start', 'end']][idx].values:
+                activities[start:end] = activity
 
-                # Segment into windows with overlap
-                segmented = rolling_window(values, (self.n_samples, 0), self.step).swapaxes(1, 2)
+            values = np.concatenate((values, activities), axis=1)
 
-                # Find y label
-                # t = []
-                # for idx in range(segmented.shape[0]):
-                    # t.append(segmented[idx, -1, -1].astype('int'))
-                t_idx = int(self.n_samples/2)
-                t = np.asarray(segmented[:, t_idx, -1]).astype('int')
+            # Segment into windows with overlap
+            segmented = rolling_window(values, (self.n_samples, 0), self.step).swapaxes(1, 2)
 
-                # Remove samples without label
-                # idx = t != 0
-                # segmented = segmented[idx]
-                # t = t[idx]
+            # Find y label
+            # t = []
+            # for idx in range(segmented.shape[0]):
+                # t.append(segmented[idx, -1, -1].astype('int'))
+            t_idx = int(self.n_samples/2)
+            t = np.asarray(segmented[:, t_idx, -1]).astype('int')
 
-                # Collect data
-                y = np.concatenate((y, t))
-                data_array = np.concatenate((data_array, segmented[:, :, :-1]))
-                users = np.concatenate((users, [(user)]*len(t)))
+            # Remove samples without label
+            # idx = t != 0
+            # segmented = segmented[idx]
+            # t = t[idx]
+
+            # Collect data
+            y = np.concatenate((y, t))
+            data_array = np.concatenate((data_array, segmented[:, :, :-1]))
+            users = np.concatenate((users, [(user)]*len(t)))
 
         if self.expand:
             y = expand_target(y, data_array.shape[1])
@@ -168,9 +166,6 @@ class LoadHAR(object):
         else:
             # y = y - 1
             pass
-
-        # Save to disk
-        # pickle.dump(data, open(data_file,"w"))
 
         return data_array, y.astype('int'), self.name, users, stats
 
@@ -225,12 +220,12 @@ class LoadHAR(object):
         data = np.concatenate((data['x_train'], data['x_test']), axis=0)
         y = np.concatenate((data['y_train'], data['y_test']), axis=0)
 
-        data_array, stats = self.add_features(data_array,
-                                       normalise=self.normalize,
-                                       add_roll=self.add_roll,
-                                       add_pitch=self.add_pitch,
-                                       add_filter=self.add_filter,
-                                       comp_magnitude=self.comp_magnitude)
+        data_array, stats = self.add_features(data,
+                                               normalise=self.normalize,
+                                               add_roll=self.add_roll,
+                                               add_pitch=self.add_pitch,
+                                               add_filter=self.add_filter,
+                                               comp_magnitude=self.comp_magnitude)
         # Convert to common labels
         y = self.map_to_common_activities(y, activity_map)
 
@@ -415,7 +410,7 @@ class LoadHAR(object):
                         14: 'WALKING', 15: 'WALKING'}
 
         # Load data
-        subjects = range(1, 17)
+        subjects = list(range(1, 17))
         cols = [0, 1, 2]
         tmp_seg = np.empty((0, self.n_samples * sr/SR, len(cols)))
         y = []
@@ -497,7 +492,7 @@ class LoadHAR(object):
     def map_to_common_activities(self, y, activity_map):
         return np.asarray([MAP_ACTIVITY.get(activity_map.get(l)) for l in y]).astype('int')
 
-    def add_features(self, data, normalise=True, ratio=0, add_roll=False, add_pitch=False, add_filter=False, comp_magnitude=False):
+    def add_features(self, data, normalise='channels', ratio=0, add_roll=False, add_pitch=False, add_filter=False, comp_magnitude=False):
         n_win, n_samp, n_dim = data.shape
         stats = []
 
@@ -505,8 +500,7 @@ class LoadHAR(object):
             data = lowpass_filter(data, fs=50, cutoff=self.lowpass)
 
         if ratio > 1:
-            data = downsample(data.reshape(-1, n_dim), ratio=ratio).\
-                reshape(n_win, n_samp/ratio, n_dim)
+            pass
 
         if add_pitch:
             pitches = []

@@ -1,7 +1,7 @@
 from os import rmdir, path
 import shutil
 from lasagne.nonlinearities import leaky_rectify, rectify, softmax
-from base import ModelConfiguration
+from .base import ModelConfiguration
 from data_preparation.load_data import LoadHAR
 from models.wconvrnn import wconvRNN
 from training.train import TrainModel

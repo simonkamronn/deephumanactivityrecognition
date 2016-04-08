@@ -3,59 +3,67 @@
   <component name="WebServers">
     <option name="servers">
       <webServer id="23746fca-b200-4aed-899b-f61925694018" name="phoebe" url="http://phoebe.compute.dtu.dk">
-        <fileTransfer host="phoebe.compute.dtu.dk" port="22" privateKey="C:\cygwin64\home\Simon\.ssh\id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
+        <fileTransfer host="phoebe.compute.dtu.dk" port="22" privateKey="$USER_HOME$/.ssh/id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" />
           </advancedOptions>
+          <option name="port" value="22" />
         </fileTransfer>
       </webServer>
       <webServer id="b1ed086e-b0ca-4688-8280-917fb908dad1" name="rhea" url="http://rhea.compute.dtu.dk">
-        <fileTransfer host="rhea.compute.dtu.dk" port="22" privateKey="C:\cygwin64\home\Simon\.ssh\id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
+        <fileTransfer host="rhea.compute.dtu.dk" port="22" privateKey="$USER_HOME$/.ssh/id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" />
           </advancedOptions>
+          <option name="port" value="22" />
         </fileTransfer>
       </webServer>
       <webServer id="abf95544-e99e-466d-a3d9-5afc49f1b967" name="tethys" url="http://tethys.compute.dtu.dk">
-        <fileTransfer host="tethys.compute.dtu.dk" port="22" privateKey="C:\cygwin64\home\Simon\.ssh\id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
+        <fileTransfer host="tethys.compute.dtu.dk" port="22" privateKey="$USER_HOME$/.ssh/id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" />
           </advancedOptions>
+          <option name="port" value="22" />
         </fileTransfer>
       </webServer>
       <webServer id="a72c4ca1-2326-452d-a2b7-7b7bf2a1b1c4" name="mnemosyne" url="http://mnemosyne.compute.dtu.dk">
-        <fileTransfer host="mnemosyne.compute.dtu.dk" port="22" privateKey="C:\cygwin64\home\Simon\.ssh\id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
+        <fileTransfer host="mnemosyne.compute.dtu.dk" port="22" privateKey="$USER_HOME$/.ssh/id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" />
           </advancedOptions>
+          <option name="port" value="22" />
         </fileTransfer>
       </webServer>
       <webServer id="a42be09b-385a-48ec-bfd4-a1b0dadd091d" name="theia" url="http://theia.compute.dtu.dk">
-        <fileTransfer host="theia.compute.dtu.dk" port="22" privateKey="C:\cygwin64\home\Simon\.ssh\id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
+        <fileTransfer host="theia.compute.dtu.dk" port="22" privateKey="$USER_HOME$/.ssh/id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" />
           </advancedOptions>
+          <option name="port" value="22" />
         </fileTransfer>
       </webServer>
       <webServer id="27280a53-6564-4bf5-b4f9-6ff19886ded1" name="oceanus" url="http://oceanus.compute.dtu.dk">
-        <fileTransfer host="oceanus.compute.dtu.dk" port="22" privateKey="C:\cygwin64\home\Simon\.ssh\id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
+        <fileTransfer host="oceanus.compute.dtu.dk" port="22" privateKey="$USER_HOME$/.ssh/id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" />
           </advancedOptions>
+          <option name="port" value="22" />
         </fileTransfer>
       </webServer>
       <webServer id="7f127003-9630-415b-a33d-72d4087592fb" name="themis" url="http://themis.compute.dtu.dk">
-        <fileTransfer host="themis.compute.dtu.dk" port="22" privateKey="C:\cygwin64\home\Simon\.ssh\id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
+        <fileTransfer host="themis.compute.dtu.dk" port="22" privateKey="$USER_HOME$/.ssh/id_rsa" rootFolder="/home/sdka/dev" accessType="SFTP" username="sdka" keyPair="true">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" />
           </advancedOptions>
+          <option name="port" value="22" />
         </fileTransfer>
       </webServer>
       <webServer id="71e0b001-f6bf-4868-8067-1942a16e9dc0" name="shared" url="http://themis.compute.dtu.dk">
-        <fileTransfer host="themis.compute.dtu.dk" port="22" privateKey="C:\cygwin64\home\Simon\.ssh\id_rsa" rootFolder="/nobackup/titans/sdka/dev/deeplearning/" accessType="SFTP" username="sdka" keyPair="true">
+        <fileTransfer host="themis.compute.dtu.dk" port="22" privateKey="$USER_HOME$/.ssh/id_rsa" rootFolder="/nobackup/titans/sdka/dev/deeplearning/" accessType="SFTP" username="sdka" keyPair="true">
           <advancedOptions>
             <advancedOptions dataProtectionLevel="Private" />
           </advancedOptions>
+          <option name="port" value="22" />
         </fileTransfer>
       </webServer>
     </option>

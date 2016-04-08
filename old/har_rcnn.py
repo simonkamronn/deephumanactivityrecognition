@@ -120,7 +120,7 @@ def main():
         train_args['inputs']['beta2'] = 1e-6
 
         # Define confusion matrix
-        cfm = ConfusionMatrix(n_classes=n_classes, class_names=ACTIVITY_MAP.values())
+        cfm = ConfusionMatrix(n_classes=n_classes, class_names=list(ACTIVITY_MAP.values()))
 
         def f_custom(model, path):
             mean_evals = model.get_output(X_test).eval()
@@ -129,7 +129,7 @@ def main():
             # cfm.batchAdd(t_class, y_class)
             # print(cfm)
 
-            cm = confusion_matrix(t_class, y_class, labels=ACTIVITY_MAP.values())
+            cm = confusion_matrix(t_class, y_class, labels=list(ACTIVITY_MAP.values()))
             cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
             plt.clf()
             plt.imshow(cm, interpolation='nearest', cmap=plt.cm.Blues)

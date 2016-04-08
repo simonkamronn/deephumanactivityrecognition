@@ -4,7 +4,7 @@ import numpy as np
 import theano
 import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
-from base import Model
+from .base import Model
 import lasagne
 
 class RBM(Model):

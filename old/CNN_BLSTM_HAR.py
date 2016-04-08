@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 
 import theano.sandbox.cuda
 theano.sandbox.cuda.use('gpu2')

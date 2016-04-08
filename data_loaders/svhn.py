@@ -2,7 +2,7 @@ import os
 import numpy as np
 from utils import env_paths
 from parmesan.datasets import load_svhn
-from data_helper import create_semi_supervised, pad_targets, cut_off_dataset
+from .data_helper import create_semi_supervised, pad_targets, cut_off_dataset
 
 
 def _download(extra=False, normalize=True):

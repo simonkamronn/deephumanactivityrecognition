@@ -105,9 +105,9 @@ def rolling_window_lastaxis(a, window, step):
     """Directly taken from Erik Rigtorp's post to numpy-discussion.
     <http://www.mail-archive.com/numpy-discussion@scipy.org/msg29450.html>"""
     if window < 1:
-       raise ValueError, "`window` must be at least 1."
+       raise ValueError
     if window > a.shape[-1]:
-        raise ValueError, "`window` is too long: %d" % window
+        raise ValueError
     shape = a.shape[:-1] + ((a.shape[-1] - window + step)/step, window)
     strides = a.strides[:-1] + (a.strides[-1]*step,) + (a.strides[-1],)
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
@@ -140,7 +140,7 @@ def one_hot(labels, n_classes=None):
         n_classes = labels.max() + 1
 
     m = np.zeros((labels.shape[0], n_classes)).astype(bool)
-    m[range(labels.shape[0]), labels] = True
+    m[list(range(labels.shape[0])), labels] = True
     return m
 
 

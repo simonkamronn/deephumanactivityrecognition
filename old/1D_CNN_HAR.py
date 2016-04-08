@@ -1,4 +1,4 @@
-from __future__ import print_function
+
 """
 Based on implementation from Zheng, 2014, Time series classification
 using multi-channels deep convolutional neural networks

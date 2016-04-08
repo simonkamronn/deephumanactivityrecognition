@@ -117,8 +117,8 @@ def main():
         validate_args['inputs']['batchsize'] = batch_size
 
         # Define confusion matrix
-        cfm = ConfusionMatrix(n_classes=n_classes, class_names=ACTIVITY_MAP.values())
-        print(n_classes, len(ACTIVITY_MAP.values()))
+        cfm = ConfusionMatrix(n_classes=n_classes, class_names=list(ACTIVITY_MAP.values()))
+        print(n_classes, len(list(ACTIVITY_MAP.values())))
 
         def f_custom(model, path):
             mean_evals = model.get_output(X_test).eval()

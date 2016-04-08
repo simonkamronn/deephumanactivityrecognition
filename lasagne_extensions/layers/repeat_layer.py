@@ -21,5 +21,5 @@ class RepeatLayer(lasagne.layers.Layer):
         #repeat the input n times
         tensors = [input]*self.n
         stacked = theano.tensor.stack(*tensors)
-        dim = [1, 0] + range(2, input.ndim + 1)
+        dim = [1, 0] + list(range(2, input.ndim + 1))
         return stacked.dimshuffle(dim)

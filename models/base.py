@@ -1,4 +1,7 @@
-import cPickle as pkl
+try:
+    import pickle as pkl
+except:
+    import pickle as pkl
 import lasagne
 import numpy as np
 import theano
@@ -53,7 +56,7 @@ class Model(object):
         :param update: The update function (optimization framework) used for training (cf. updates.py), e.g. sgd.
         :param update_args: The args for the update function applied to training, e.g. (0.001,).
         """
-        print "### BUILDING MODEL ###"
+        print("### BUILDING MODEL ###")
 
         self.train_args = {}
         self.train_args['inputs'] = OrderedDict({})
@@ -91,7 +94,7 @@ class Model(object):
         p = paths.get_model_path(self.get_root_path(), self.model_name, self.n_in, self.n_hidden, self.n_out)
         if not epoch is None: p += "_epoch_%i" % epoch
         if self.model_params is None:
-            raise ("Model params are not set and can therefore not be pickled.")
+            raise "Model params are not set and can therefore not be pickled."
         model_params = [param.get_value() for param in self.model_params]
         pkl.dump(model_params, open(p, "wb"), protocol=pkl.HIGHEST_PROTOCOL)
 
@@ -109,7 +112,7 @@ class Model(object):
             init_param = self.model_params[i]
             loaded_param = model_params[i]
             if not loaded_param.shape == tuple(init_param.shape.eval()):
-                print "Model could not be loaded, since parameters are not aligned."
+                print("Model could not be loaded, since parameters are not aligned.")
             self.model_params[i].set_value(np.asarray(model_params[i], dtype=theano.config.floatX), borrow=True)
 
     def get_output(self, x):
