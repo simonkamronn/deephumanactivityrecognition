@@ -76,7 +76,7 @@ def run_vrae_har():
     print('Test size: ', test_set[0].shape)
 
     n, n_l, n_c = train_set[0].shape  # Datapoints in the dataset, input features.
-    n_batches = n / 100  # The number of batches.
+    n_batches = int(n / 100)  # The number of batches.
     bs = n / n_batches  # The batchsize.
 
     # Initialize the auxiliary deep generative model.
