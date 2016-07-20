@@ -9,7 +9,6 @@ from lasagne.layers import *
 from lasagne import init
 from lasagne_extensions.updates import adam, rmsprop
 from lasagne_extensions.layers import TiedDropoutLayer
-from lasagne_extensions.layers import LSTMDropoutLayer
 
 CONST_FORGET_B = 1.
 GRAD_CLIP = 5
@@ -91,11 +90,9 @@ class wconvRNN(Model):
             self.log += "\nAdding LSTM layer with: %d units" % n_hid
             self.log += "\nLSTM in dropout: %.2f" % rnn_in_dropout
             self.log += "\nLSTM hid dropout: %.2f" % rnn_hid_dropout
-            l_prev = LSTMDropoutLayer(
+            l_prev = LSTMLayer(
                 l_prev,
                 num_units=n_hid,
-                in_dropout=rnn_in_dropout,
-                hid_dropout=rnn_hid_dropout,
                 grad_clipping=grad_clip,
                 peepholes=peepholes,
                 ingate=Gate(
