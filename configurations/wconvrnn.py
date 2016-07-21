@@ -76,8 +76,6 @@ def main():
         shutil.copy(scriptpath, model.root_path + '/' + filename)
 
         train = TrainModel(model=model,
-                           anneal_lr=0.8,
-                           anneal_lr_freq=50,
                            output_freq=1,
                            pickle_f_custom_freq=100,
                            f_custom_eval=None)
@@ -92,7 +90,8 @@ def main():
                  train=train,
                  load_data=load_data,
                  factor=factor,
-                 batch_size=64)
+                 batch_size=64,
+                 anneal=[("learningrate", 100, 0.75, 3e-5)])
 
 if __name__ == "__main__":
     main()

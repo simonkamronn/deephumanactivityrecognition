@@ -74,7 +74,8 @@ class ModelConfiguration(object):
 
         self.d = str(datetime.datetime.fromtimestamp(time.time()).strftime('%Y%m%d%H%M%S'))
 
-    def run(self, train_index, test_index, lr, n_epochs, model, train, load_data, factor=1, batch_size=None):
+    def run(self, train_index, test_index, lr, n_epochs, model, train, load_data, factor=1, batch_size=None,
+            anneal=None):
         x_train, x_test = self.X[train_index], self.X[test_index]
         y_train, y_test = self.y[train_index], self.y[test_index]
         n_windows, sequence_length, n_features = x_train.shape
@@ -173,7 +174,8 @@ class ModelConfiguration(object):
                           f_validate, validate_args,
                           n_train_batches=n_train_batches,
                           n_test_batches=n_test_batches,
-                          n_epochs=n_epochs)
+                          n_epochs=n_epochs,
+                          anneal=anneal)
 
         # Reset logging
         handlers = train.logger.handlers[:]
