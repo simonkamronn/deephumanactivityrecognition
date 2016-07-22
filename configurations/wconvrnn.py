@@ -48,8 +48,6 @@ def main():
                          n_hidden=[50, 50],
                          conv_dropout=0.5,
                          conv_stride=2,
-                         rnn_in_dropout=0.0,
-                         rnn_hid_dropout=0.0,
                          output_dropout=0.5,
                          n_out=conf.n_classes,
                          trans_func=leaky_rectify,
