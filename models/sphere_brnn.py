@@ -5,7 +5,7 @@ import lasagne
 from .base import Model
 from lasagne_extensions.nonlinearities import rectify, softmax
 from lasagne.layers import get_output, get_output_shape, LSTMLayer, Gate, ConcatLayer, DenseLayer, \
-    DropoutLayer, InputLayer, SliceLayer, get_all_params, FeaturePoolLayer, GlobalPoolLayer
+    DropoutLayer, InputLayer, SliceLayer, get_all_params, FeaturePoolLayer, ReshapeLayer, PadLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
 from lasagne_extensions.updates import adam, rmsprop
 CONST_FORGET_B = 1.
@@ -13,7 +13,7 @@ GRAD_CLIP = 5
 
 
 class BRNN(Model):
-    def __init__(self, n_in, n_hidden, n_out, grad_clip=GRAD_CLIP, peepholes=False,
+    def __init__(self, n_in, n_hidden, n_out, grad_clip=GRAD_CLIP, peepholes=False, fs=20,
                  trans_func=rectify, out_func=softmax, dropout=0.0, bl_dropout=0.0, slicers=None):
         super(BRNN, self).__init__(n_in, n_hidden, n_out, trans_func)
         self.outf = out_func
@@ -86,38 +86,57 @@ class BRNN(Model):
         sequence_length, n_features = n_in
         self.l_in = InputLayer(shape=(None, sequence_length, n_features))
         inputs = self.l_in
+        print('input shape', inputs.output_shape)
+
+        # Reshape into 1 second windows on axis 1
+        l_reshape = ReshapeLayer(inputs, (-1, fs, n_features))
 
         # Acceleration
-        l_accel = SliceLayer(inputs, slicers['accel'])
+        l_accel = SliceLayer(l_reshape, slicers['accel'])
         l_accel = _blstm_module(l_accel, n_hidden, dropout, bl_dropout)
         print('l_accel shape', l_accel.output_shape)
 
         # PIR
-        l_pir = SliceLayer(inputs, slicers['pir'])
-        l_pir = FeaturePoolLayer(l_pir, pool_size=sequence_length, axis=1, pool_function=T.mean)
-        l_pir = SliceLayer(l_pir, 1, 1)
+        l_pir = SliceLayer(l_reshape, slicers['pir'])
+        l_pir = FeaturePoolLayer(l_pir, pool_size=fs, axis=1, pool_function=T.mean)
+        l_pir = SliceLayer(l_pir, indices=0, axis=1)
         print('l_pir shape', l_pir.output_shape)
 
         # RSSI
-        l_rssi = SliceLayer(inputs, slicers['rssi'])
-        l_rssi = _blstm_module(l_rssi, [10], dropout, bl_dropout)
+        l_rssi = SliceLayer(l_reshape, slicers['rssi'])
+        l_rssi = _blstm_module(l_rssi, [16], dropout, 0)
         print('l_rssi shape', l_rssi.output_shape)
 
         # Video
-        l_video = SliceLayer(inputs, slicers['video'])
+        l_video = SliceLayer(l_reshape, slicers['video'])
         l_video = _blstm_module(l_video, n_hidden, dropout, bl_dropout)
         print('l_video shape', l_video.output_shape)
 
         # Collect all embeddings
         l_concat = ConcatLayer([l_accel, l_pir, l_rssi, l_video], axis=1)
+        print('l_concat', l_concat.output_shape)
 
-        print("Output input shape", l_concat.output_shape)
-        l_prev = DenseLayer(l_concat, num_units=n_hidden[-1]*2, nonlinearity=rectify)
-        self.model = DenseLayer(l_prev, num_units=n_out, nonlinearity=out_func)
+        # Reshape to get batches along axis 1
+        l_reshape = ReshapeLayer(l_concat, (-1, int(sequence_length//fs), 2*n_hidden[-1]+16+10))
+        print('l_reshape', l_reshape.output_shape)
+
+        # Size should now be (1, 29, feature_size)
+        l_lstm, l_forward, l_backward = _blstm_layer(l_reshape, n_hidden[-1])
+        print('l_lstm', l_lstm.output_shape)
+
+        # Reshape to process each time step individually
+        l_reshape = ReshapeLayer(l_lstm, (-1, n_hidden[-1]))
+        # l_prev = DenseLayer(l_reshape, num_units=n_hidden[-1]*2, nonlinearity=rectify)
+        # l_prev = DropoutLayer(l_prev, p=dropout)
+        # l_prev = DenseLayer(l_prev, num_units=n_hidden[-1]*2, nonlinearity=rectify)
+        # l_prev = DropoutLayer(l_prev, p=dropout)
+        l_out = DenseLayer(l_reshape, num_units=n_out, nonlinearity=out_func)
+        self.model = ReshapeLayer(l_out, (-1, int(sequence_length//fs), n_out))
         self.model_params = get_all_params(self.model)
+        print("Output shape", self.model.output_shape)
 
         self.sym_x = T.tensor3('x')
-        self.sym_t = T.matrix('t')
+        self.sym_t = T.tensor3('t')
 
     def build_model(self, train_set, test_set, validation_set=None, weights=None):
         super(BRNN, self).build_model(train_set, test_set, validation_set)
