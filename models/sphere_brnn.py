@@ -110,7 +110,7 @@ class BRNN(Model):
             l_slice = SliceLayer(incoming, -1)
             return FeaturePoolLayer(l_slice, pool_size=pool_size, axis=axis, pool_function=T.mean)
 
-        def rnn_encoder(l_x_in, enc_rnn):
+        def rnn_encoder(l_x_in, enc_rnn, mask=None):
             # Decide Glorot initializaiton of weights.
             init_w = 1e-3
             hid_w = "relu"
@@ -135,7 +135,8 @@ class BRNN(Model):
                                  cell=cell,
                                  outgate=outgate,
                                  name=name,
-                                 only_return_final=return_final)
+                                 only_return_final=return_final,
+                                 mask_input=mask)
                 return lstm
 
             # RNN encoder implementation
@@ -160,7 +161,8 @@ class BRNN(Model):
         # l_accel_enc = _lstm_module(l_accel, n_hidden, dropout, bn)
 
         # Build encoder network
-        l_accel_enc = rnn_encoder(l_accel, n_enc)
+        l_accel_mask = BinaryLayer(l_accel_missing)
+        l_accel_enc = rnn_encoder(l_accel, n_enc, l_accel_mask)
         print('l_accel shape', l_accel_enc.output_shape)
 
         # Set values of encoder network
