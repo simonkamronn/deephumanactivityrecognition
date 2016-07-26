@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import json
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from lasagne.nonlinearities import leaky_rectify, softmax, rectify
+from lasagne.nonlinearities import leaky_rectify, softmax, rectify, elu, very_leaky_rectify
 from training.train import TrainModel
 from utils import copy_script
 from sklearn.cross_validation import train_test_split
@@ -50,8 +50,9 @@ data_path = '/nobackup/titans/sdka/data/sphere/data'
 class_weights = np.asarray(json.load(open(data_path+'/class_weights.json', 'r')))
 data_ids = range(1, 11)
 fs = 20
-num_secs = 29
+required_seconds = 29
 batch_size = 25
+n_features = 29
 
 ## Load data
 data, targets = load_sequences(data_ids, data_path, fs=fs)
@@ -66,15 +67,38 @@ data = scaler.transform(data)
 for i in [9, 13, 18, 28]:
     data[:, i] = np.clip(data[:, i], 0, 1)
 
+if True:
+    # Sample sequences
+    _data = []
+    _targets = []
+    for i in range((data.shape[0]//(fs*required_seconds))*50):
+        # print(data.shape)
+        idx = np.random.randint(0, data.shape[0] - required_seconds*fs)
+        n_seconds = np.random.randint(10, 29)
+        # print(idx, n_seconds)
+        sequence = data[idx:idx+n_seconds*fs, :]
+        # print(sequence.shape)
+        sequence = np.concatenate((sequence, np.zeros((required_seconds * fs - n_seconds*fs, n_features))), axis=0)
+        # print(sequence.shape)
+        # sequence = sequence.reshape((1, required_seconds * fs, n_features)).astype('float32')
+        _data.append(sequence)
+
+        _target = targets[idx//fs:idx//fs + n_seconds, :]
+        _target = np.concatenate((_target, np.zeros((required_seconds - n_seconds, 20))))
+        _targets.append(_target)
+
+    data = np.concatenate(_data)
+    targets = np.concatenate(_targets)
+
 # Calc max seconds
-data_lim = (data.shape[0] // (fs*num_secs)) * (fs*num_secs)
+data_lim = (data.shape[0] // (fs * required_seconds)) * (fs * required_seconds)
 
 # Reshape to 29 second windows
-data = data[:data_lim].reshape(-1, fs*num_secs, 29).astype('float32')
-targets = targets[:int(data_lim / fs)].reshape(-1, num_secs, 20)
+data = data[:data_lim].reshape(-1, fs * required_seconds, 29).astype('float32')
+targets = targets[:int(data_lim / fs)].reshape(-1, required_seconds, 20)
 
 # Fill up to match batch_size
-filling = np.zeros((3, fs * num_secs, 29))
+filling = np.zeros((3, fs * required_seconds, 29))
 filling[:, :, [9, 13, 18, 28]] = 1
 data = np.concatenate((data, filling))
 targets = np.pad(targets, ((0, 3), (0, 0), (0, 0)), mode='constant')
@@ -83,7 +107,7 @@ print("Data size")
 print(data.shape)
 print(targets.shape)
 
-train_data, test_data, train_targets, test_targets = train_test_split(data, targets, test_size=0.1)
+train_data, test_data, train_targets, test_targets = train_test_split(data, targets, test_size=100)
 
 print("Training sizes")
 print(train_data.shape)
@@ -110,17 +134,17 @@ encoder_path = '/home/sdka/dev/deeplearning/output/id_20160725170312_RAE_4_[32]_
 enc_values = pickle.load(open(encoder_path, 'rb'))
 
 model = BRNN(n_in=(sequence_length, n_features),
-             n_hidden=[16, 16, 16],
+             n_hidden=[32, 32, 32],
              n_out=n_classes,
              n_enc=32,
              enc_values=enc_values,
              freeze_encoder=False,
-             trans_func=leaky_rectify,
+             trans_func=very_leaky_rectify,
              out_func=softmax,
              dropout=0.5,
-             bl_dropout=0.2,
+             bl_dropout=0.5,
              slicers=slicers,
-             bn=False)
+             bn=True)
 
 # Copy model to output folder
 copy_script(__file__, model)
@@ -139,10 +163,10 @@ try:
                       f_validate, validate_args,
                       n_train_batches=n_train_batches,
                       n_test_batches=1,
-                      n_epochs=2000,
+                      n_epochs=100,
                       # Any symbolic model variable can be annealed during
                       # training with a tuple of (var_name, every, scale constant, minimum value).
-                      anneal=[("learningrate", 50, 0.75, 3e-4)])
+                      anneal=[("learningrate", 10, 0.75, 3e-4)])
 
 except KeyboardInterrupt:
     print('Ending')
@@ -153,7 +177,7 @@ finally:
     annotation_names = json.load(open(data_path + '/annotations.json'))
     num_lines = 0
     se_cols = ['start', 'end']
-    seq_len = fs * num_secs
+    seq_len = fs * required_seconds
     with open('%s/%s_submission.csv' % (model.get_root_path(), pendulum.now('Europe/Copenhagen')), 'w') as fil:
         fil.write(','.join(['record_id'] + se_cols + annotation_names))
         fil.write('\n')

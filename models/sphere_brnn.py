@@ -206,8 +206,8 @@ class BRNN(Model):
                 l_prev = batch_norm(l_prev)
                 self.log += "\nAdding batchnorm"
 
-            if dropout:
-                self.log += "\nAdding output dropout with probability %.2f" % dropout
+            if bl_dropout > 0:
+                self.log += "\nAdding dropout with probability %.2f" % bl_dropout
                 l_prev = DropoutLayer(l_prev, p=dropout)
 
         # Reshape to process each time step individually
