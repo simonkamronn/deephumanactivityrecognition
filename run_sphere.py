@@ -98,16 +98,16 @@ def _sample_data(data, targets):
     return data, targets
 
 # Truncate and reshape data to get on same first dimension as targets.
-data_lim = (data.shape[0] // fs) * fs
-data = data[:data_lim].reshape(-1, fs, n_features).astype('float32')
-targets = targets[:int(data_lim / fs)]
+data_lim = (data.shape[0] // (required_seconds*fs)) * (required_seconds*fs)
+data = data[:data_lim].reshape(-1, required_seconds*fs, n_features).astype('float32')
+targets = targets[:int(data_lim / fs)].reshape(-1, required_seconds, 20)
 
 # Split into training and testing sets
-train_data, test_data, train_targets, test_targets = train_test_split(data, targets, test_size=1000)
+train_data, test_data, train_targets, test_targets = train_test_split(data, targets, test_size=50)
 
 # Resample datasets
-train_data, train_targets = _sample_data(train_data.reshape(-1, n_features), train_targets)
-test_data, test_targets = _sample_data(test_data.reshape(-1, n_features), test_targets)
+train_data, train_targets = _sample_data(train_data.reshape(-1, n_features), train_targets.reshape(-1, 20))
+test_data, test_targets = _sample_data(test_data.reshape(-1, n_features), test_targets.reshape(-1, 20))
 
 print("Data size")
 print(data.shape)
