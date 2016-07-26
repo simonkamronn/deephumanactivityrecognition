@@ -3,7 +3,7 @@ import theano.tensor as T
 from lasagne import init
 from models.base import Model
 from lasagne_extensions.layers import (InputLayer, DenseLayer, ReshapeLayer,
-                                       NonlinearityLayer, BatchNormLayer, get_all_params, get_output)
+                                       NonlinearityLayer, get_all_params, get_output, get_all_param_values)
 from lasagne_extensions.layers import (RecurrentLayer, LSTMLayer, ConcatLayer, RepeatLayer, Gate)
 from lasagne_extensions.objectives import categorical_crossentropy, categorical_accuracy, squared_error, aggregate
 from lasagne_extensions.nonlinearities import rectify, softplus, sigmoid, softmax
@@ -11,6 +11,9 @@ from lasagne_extensions.updates import total_norm_constraint
 from lasagne_extensions.updates import rmsprop, adam, adagrad
 from theano.tensor.shared_randomstreams import RandomStreams
 from lasagne.regularization import regularize_network_params, l2
+from lasagne.layers import BatchNormLayer
+import pickle
+from utils import env_paths as paths
 
 
 class RAE(Model):
@@ -93,6 +96,8 @@ class RAE(Model):
             l_px = dense_layer(l_px, hid)
 
         # Output
+        self.l_enc = l_enc
+
         l_px = DenseLayer(l_px, n_c, nonlinearity=None)
         self.l_px = ReshapeLayer(l_px, (-1, n_l, n_c))
         self.l_x_in = l_x_in
@@ -102,6 +107,7 @@ class RAE(Model):
         self.f_px = theano.function([self.sym_x], outputs, on_unused_input='warn')
 
         # Define model parameters
+        self.encoder_params = get_all_param_values(self.l_enc)
         self.model_params = get_all_params(self.l_px)
         self.trainable_model_params = get_all_params(self.l_px, trainable=True)
 
@@ -117,14 +123,10 @@ class RAE(Model):
 
         # Cost
         inputs = {self.l_x_in: self.sym_x}
-        px = get_output(self.l_px, inputs, batch_norm_update_averages=False, batch_norm_use_averages=False)
+        # px = get_output(self.l_px, inputs, batch_norm_update_averages=False, batch_norm_use_averages=False)
+        px = get_output(self.l_px, inputs)
         cost = aggregate(squared_error(px, self.sym_x), mode='mean')
         # cost += 1e-4 * regularize_network_params(self.l_px, l2)
-
-        if self.batchnorm:
-            # TODO: implement the BN layer correctly.
-            inputs = {self.l_x_in: self.sym_x}
-            get_output(self.l_px, inputs, weighting=None, batch_norm_update_averages=True, batch_norm_use_averages=False)
 
         grads_collect = T.grad(cost, self.trainable_model_params)
         sym_beta1 = T.scalar('beta1')
@@ -174,3 +176,11 @@ class RAE(Model):
         s = ""
         s += 'batch norm: %s.\n' % (str(self.batchnorm))
         return s
+
+    def save_encoder(self):
+        """
+        Dump the model into a pickled version
+        """
+        p = paths.path_exists(self.root_path + '/pickled model/')
+        p += 'encoder.pkl'
+        pickle.dump(self.encoder_params, open(p, "wb"), protocol=pickle.HIGHEST_PROTOCOL)
