@@ -3,12 +3,13 @@ theano.config.floatX = 'float32'
 import theano.tensor as T
 import lasagne
 from .base import Model
-from lasagne_extensions.nonlinearities import rectify, softmax
+from lasagne.nonlinearities import rectify, softmax
 from lasagne.layers import get_output, get_output_shape, LSTMLayer, Gate, ConcatLayer, DenseLayer, \
     DropoutLayer, InputLayer, SliceLayer, get_all_params, FeaturePoolLayer, ReshapeLayer, batch_norm, \
-    BatchNormLayer, NonlinearityLayer
+    BatchNormLayer, NonlinearityLayer, GlobalPoolLayer
+from lasagne_extensions.layers import BinaryLayer
 from lasagne.objectives import aggregate, categorical_crossentropy, categorical_accuracy
-from lasagne_extensions.updates import adam, rmsprop
+from lasagne.updates import adam, rmsprop
 from lasagne import init
 CONST_FORGET_B = 1.
 GRAD_CLIP = 5
@@ -22,7 +23,7 @@ class BRNN(Model):
         self.outf = out_func
         self.log = ""
 
-        def _lstm_layer(incoming, n_hid, backwards=False, return_final=False, bn=False):
+        def _lstm_layer(incoming, n_hid, backwards=False, return_final=False, bn=False, mask=None):
             lstm = LSTMLayer(
                 incoming,
                 num_units=int(n_hid),
@@ -37,7 +38,8 @@ class BRNN(Model):
                 ),
                 nonlinearity=lasagne.nonlinearities.tanh,
                 backwards=backwards,
-                only_return_final=return_final
+                only_return_final=return_final,
+                mask_input=mask
             )
             if bn:
                 self.log += "\nAdding batchnorm"
@@ -62,10 +64,10 @@ class BRNN(Model):
 
             return l_prev
 
-        def _blstm_layer(incoming, n_hid, return_final=False):
+        def _blstm_layer(incoming, n_hid, return_final=False, mask=None):
             self.log += "\nAdding BLSTM layer with %d units" % n_hid
-            l_forward = _lstm_layer(incoming, n_hid/2, False, return_final)
-            l_backward = _lstm_layer(incoming, n_hid/2, True, return_final)
+            l_forward = _lstm_layer(incoming, n_hid/2, False, return_final, mask)
+            l_backward = _lstm_layer(incoming, n_hid/2, True, return_final, mask)
 
             out = ConcatLayer(
                 [l_forward, l_backward],
@@ -73,10 +75,10 @@ class BRNN(Model):
             )
             return out, l_forward, l_backward
 
-        def _blstm_module(incoming, n_hidden, bl_dropout, bn):
+        def _blstm_module(incoming, n_hidden, bl_dropout, bn, mask=None):
             l_prev = incoming
             for i, n_hid in enumerate(n_hidden):
-                l_prev, l_forward, l_backward = _blstm_layer(l_prev, n_hid)
+                l_prev, l_forward, l_backward = _blstm_layer(l_prev, n_hid, mask=mask)
 
                 if len(n_hidden) - 1 > i:
                     if bn:
@@ -196,9 +198,11 @@ class BRNN(Model):
         l_reshape = ReshapeLayer(l_concat, (-1, int(sequence_length//fs), n_enc+5+10+10+1))
         print('l_reshape', l_reshape.output_shape)
 
+        l_mask = GlobalPoolLayer(l_reshape, pool_function=T.sum)
+        l_mask = BinaryLayer(l_mask, min=0, max=1)
         # Size should now be (1, 29, feature_size)
         for n_hid in n_hidden:
-            l_prev, _, _= _blstm_layer(l_reshape, n_hid, return_final=False)
+            l_prev, _, _= _blstm_layer(l_reshape, n_hid, return_final=False, mask=l_mask)
             print('l_blstm', l_prev.output_shape)
 
             if bn:
