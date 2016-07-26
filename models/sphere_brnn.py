@@ -233,23 +233,25 @@ class BRNN(Model):
         self.model_params = get_all_params(self.model)
         print("Output shape", self.model.output_shape)
 
+        self.mask = l_mask
         self.sym_x = T.tensor3('x')
         self.sym_t = T.tensor3('t')
 
     def build_model(self, train_set, test_set, validation_set=None, weights=None):
         super(BRNN, self).build_model(train_set, test_set, validation_set)
 
-        def brier_score(given, predicted, weight_vector):
-            return T.power(given - predicted, 2.0).dot(weight_vector).mean()
+        def brier_score(given, predicted, weight_vector, mask):
+            return T.mean(T.power(given - predicted, 2.0).dot(weight_vector) * mask)
 
         epsilon = 1e-8
+        mask = get_output(self.mask, self.sym_x)
         y_train = T.clip(get_output(self.model, self.sym_x), epsilon, 1)
-        train_brier = brier_score(y_train, self.sym_t, weights)
+        train_brier = brier_score(y_train, self.sym_t, weights, mask)
         train_cc = aggregate(categorical_crossentropy(y_train, self.sym_t), mode='mean')
         loss_train_acc = categorical_accuracy(y_train, self.sym_t).mean()
 
         y_test = T.clip(get_output(self.model, self.sym_x, deterministic=True), epsilon, 1)
-        test_brier = brier_score(y_test, self.sym_t, weights)
+        test_brier = brier_score(y_test, self.sym_t, weights, mask)
         test_cc = aggregate(categorical_crossentropy(y_test, self.sym_t), mode='mean')
         test_acc = categorical_accuracy(y_test, self.sym_t).mean()
 

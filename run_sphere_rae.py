@@ -1,6 +1,6 @@
 import theano
 from training.train import TrainModel
-from lasagne_extensions.nonlinearities import rectify
+from lasagne_extensions.nonlinearities import rectify, leaky_rectify
 from models.rae import RAE
 import matplotlib.pyplot as plt
 from sklearn.cross_validation import train_test_split
@@ -109,7 +109,7 @@ n_batches = n // batch_size
 
 # Initialize recurrent variational autoencoder
 model = RAE(n_c=int(n_c), n_l=int(n_l), px_hid=[32], enc_rnn=32, dec_rnn=32,
-            nonlinearity=rectify, batchnorm=False)
+            nonlinearity=leaky_rectify, batchnorm=False)
 
 # Copy model to output folder
 copy_script(__file__, model)

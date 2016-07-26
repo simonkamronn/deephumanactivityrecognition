@@ -67,7 +67,8 @@ data = scaler.transform(data)
 for i in [9, 13, 18, 28]:
     data[:, i] = np.clip(data[:, i], 0, 1)
 
-if True:
+
+def _sample_data(data, targets):
     # Sample sequences
     _data = []
     _targets = []
@@ -75,12 +76,9 @@ if True:
         # print(data.shape)
         idx = np.random.randint(0, data.shape[0] - required_seconds*fs)
         n_seconds = np.random.randint(10, 29)
-        # print(idx, n_seconds)
+
         sequence = data[idx:idx+n_seconds*fs, :]
-        # print(sequence.shape)
         sequence = np.concatenate((sequence, np.zeros((required_seconds * fs - n_seconds*fs, n_features))), axis=0)
-        # print(sequence.shape)
-        # sequence = sequence.reshape((1, required_seconds * fs, n_features)).astype('float32')
         _data.append(sequence)
 
         _target = targets[idx//fs:idx//fs + n_seconds, :]
@@ -90,24 +88,30 @@ if True:
     data = np.concatenate(_data)
     targets = np.concatenate(_targets)
 
-# Calc max seconds
-data_lim = (data.shape[0] // (fs * required_seconds)) * (fs * required_seconds)
+    # Calc max seconds
+    data_lim = (data.shape[0] // (fs * required_seconds)) * (fs * required_seconds)
 
-# Reshape to 29 second windows
-data = data[:data_lim].reshape(-1, fs * required_seconds, 29).astype('float32')
-targets = targets[:int(data_lim / fs)].reshape(-1, required_seconds, 20)
+    # Reshape to 29 second windows
+    data = data[:data_lim].reshape(-1, fs * required_seconds, n_features).astype('float32')
+    targets = targets[:int(data_lim / fs)].reshape(-1, required_seconds, 20)
 
-# Fill up to match batch_size
-filling = np.zeros((3, fs * required_seconds, 29))
-filling[:, :, [9, 13, 18, 28]] = 1
-data = np.concatenate((data, filling))
-targets = np.pad(targets, ((0, 3), (0, 0), (0, 0)), mode='constant')
+    return data, targets
+
+# Truncate and reshape data to get on same first dimension as targets.
+data_lim = (data.shape[0] // fs) * fs
+data = data[:data_lim].reshape(-1, fs, n_features).astype('float32')
+targets = targets[:int(data_lim / fs)]
+
+# Split into training and testing sets
+train_data, test_data, train_targets, test_targets = train_test_split(data, targets, test_size=1000)
+
+# Resample datasets
+train_data, train_targets = _sample_data(train_data.reshape(-1, n_features), train_targets)
+test_data, test_targets = _sample_data(test_data.reshape(-1, n_features), test_targets)
 
 print("Data size")
 print(data.shape)
 print(targets.shape)
-
-train_data, test_data, train_targets, test_targets = train_test_split(data, targets, test_size=100)
 
 print("Training sizes")
 print(train_data.shape)
@@ -139,7 +143,7 @@ model = BRNN(n_in=(sequence_length, n_features),
              n_enc=32,
              enc_values=enc_values,
              freeze_encoder=False,
-             trans_func=elu,
+             trans_func=very_leaky_rectify,
              out_func=softmax,
              dropout=0.5,
              bl_dropout=0.5,
@@ -153,7 +157,7 @@ f_train, f_test, f_validate, train_args, test_args, validate_args, predict = mod
                                                                                                test_set,
                                                                                                weights=class_weights)
 train_args['inputs']['batchsize'] = batch_size
-train_args['inputs']['learningrate'] = 0.003
+train_args['inputs']['learningrate'] = 0.004
 # test_args['inputs']['batchsize'] = batch_size
 
 try:
