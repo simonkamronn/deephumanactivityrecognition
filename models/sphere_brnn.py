@@ -163,8 +163,7 @@ class BRNN(Model):
             p = params[idx]
             if p.get_value().shape != v.shape:
                 raise ValueError("mismatch: parameter has shape %r but value to "
-                                 "set has shape %r" %
-                                 (p.get_value().shape, v.shape))
+                                 "set has shape %r" % (p.get_value().shape, v.shape))
             else:
                 p.set_value(v)
 
@@ -251,7 +250,7 @@ class BRNN(Model):
         sym_beta2 = T.scalar('beta2')
         grads = T.grad(train_brier, all_params)
         grads = [T.clip(g, -1, 1) for g in grads]
-        updates = rmsprop(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
+        updates = adam(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
 
         inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2]
         f_train = theano.function(
@@ -286,7 +285,7 @@ class BRNN(Model):
         self.train_args['inputs']['batchsize'] = 64
         self.train_args['inputs']['learningrate'] = 1e-3
         self.train_args['inputs']['beta1'] = 0.9
-        self.train_args['inputs']['beta2'] = 1e-6
+        self.train_args['inputs']['beta2'] = 0.999  # 1e-6
         self.train_args['outputs']['train_cc'] = '%0.4f'
         # self.train_args['outputs']['train_acc'] = '%0.4f'
         self.train_args['outputs']['train_brier'] = '%0.4f'

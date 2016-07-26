@@ -110,11 +110,11 @@ encoder_path = '/home/sdka/dev/deeplearning/output/id_20160725170312_RAE_4_[32]_
 enc_values = pickle.load(open(encoder_path, 'rb'))
 
 model = BRNN(n_in=(sequence_length, n_features),
-             n_hidden=[32, 32],
+             n_hidden=[16, 16, 16],
              n_out=n_classes,
              n_enc=32,
              enc_values=enc_values,
-             freeze_encoder=True,
+             freeze_encoder=False,
              trans_func=leaky_rectify,
              out_func=softmax,
              dropout=0.5,
