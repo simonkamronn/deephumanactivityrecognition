@@ -139,7 +139,7 @@ model = BRNN(n_in=(sequence_length, n_features),
              n_enc=32,
              enc_values=enc_values,
              freeze_encoder=False,
-             trans_func=very_leaky_rectify,
+             trans_func=elu,
              out_func=softmax,
              dropout=0.5,
              bl_dropout=0.5,
@@ -157,13 +157,13 @@ train_args['inputs']['learningrate'] = 0.003
 # test_args['inputs']['batchsize'] = batch_size
 
 try:
-    train = TrainModel(model=model, output_freq=10, pickle_f_custom_freq=10, f_custom_eval=None)
+    train = TrainModel(model=model, output_freq=1, pickle_f_custom_freq=10, f_custom_eval=None)
     train.train_model(f_train, train_args,
                       f_test, test_args,
                       f_validate, validate_args,
                       n_train_batches=n_train_batches,
                       n_test_batches=1,
-                      n_epochs=100,
+                      n_epochs=200,
                       # Any symbolic model variable can be annealed during
                       # training with a tuple of (var_name, every, scale constant, minimum value).
                       anneal=[("learningrate", 10, 0.75, 3e-4)])

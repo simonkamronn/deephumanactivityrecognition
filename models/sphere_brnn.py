@@ -23,7 +23,7 @@ class BRNN(Model):
         self.outf = out_func
         self.log = ""
 
-        def _lstm_layer(incoming, n_hid, backwards=False, return_final=False, bn=False, mask=None):
+        def _lstm_layer(incoming, n_hid, backwards=False, return_final=False, mask=None):
             lstm = LSTMLayer(
                 incoming,
                 num_units=int(n_hid),
@@ -41,23 +41,27 @@ class BRNN(Model):
                 only_return_final=return_final,
                 mask_input=mask
             )
-            if bn:
-                self.log += "\nAdding batchnorm"
-                lstm = batch_norm(lstm)
-
             return lstm
 
         def _lstm_module(incoming, n_hidden, dropout, bn):
             l_prev = incoming
             for i, n_hid in enumerate(n_hidden):
                 return_final = False if (len(n_hidden)-1 > i) else True
-                l_prev = _lstm_layer(l_prev, n_hid, return_final=return_final, bn=bn)
+                l_prev = _lstm_layer(l_prev, n_hid, return_final=return_final)
 
+                # Between layers
                 if len(n_hidden) - 1 > i:
+                    if bn:
+                        self.log += "\nAdding batchnorm"
+                        l_prev = batch_norm(l_prev)
                     if bl_dropout:
                         self.log += "\nAdding lstm dropout with probability %.2f" % dropout
                         l_prev = DropoutLayer(l_prev, p=dropout)
 
+            # Output
+            if bn:
+                self.log += "\nAdding batchnorm"
+                l_prev = batch_norm(l_prev)
             if dropout:
                 self.log += "\nAdding lstm dropout with probability %.2f" % dropout
                 l_prev = DropoutLayer(l_prev, p=dropout)
