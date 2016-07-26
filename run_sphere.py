@@ -115,10 +115,10 @@ model = BRNN(n_in=(sequence_length, n_features),
              n_enc=32,
              enc_values=enc_values,
              freeze_encoder=True,
-             trans_func=rectify,
+             trans_func=leaky_rectify,
              out_func=softmax,
              dropout=0.5,
-             bl_dropout=0.5,
+             bl_dropout=0.2,
              slicers=slicers,
              bn=False)
 

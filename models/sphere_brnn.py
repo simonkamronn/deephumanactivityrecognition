@@ -250,7 +250,7 @@ class BRNN(Model):
         sym_beta1 = T.scalar('beta1')
         sym_beta2 = T.scalar('beta2')
         grads = T.grad(train_brier, all_params)
-        grads = [T.clip(g, -5, 5) for g in grads]
+        grads = [T.clip(g, -1, 1) for g in grads]
         updates = rmsprop(grads, all_params, self.sym_lr, sym_beta1, sym_beta2)
 
         inputs = [self.sym_index, self.sym_batchsize, self.sym_lr, sym_beta1, sym_beta2]
